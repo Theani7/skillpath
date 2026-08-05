@@ -166,18 +166,17 @@ logger = logging.getLogger("resume-analyzer")
 logging.basicConfig(level=logging.INFO)
 
 # Seed skills taxonomy and load cache
+from api.seeders import (
+    seed_skills_taxonomy, seed_market_data, seed_skill_recommendations,
+    seed_roadmap_templates, seed_learning_actions, seed_learning_resources,
+    seed_skill_difficulty, seed_skill_clusters, seed_video_resources,
+    seed_role_configs, seed_courses,
+)
 from api.seed_data import (
-    seed_skills_taxonomy, load_skills_cache,
-    seed_market_data, load_market_cache,
-    seed_skill_recommendations, load_skill_recs_cache,
-    seed_roadmap_templates, load_roadmaps_cache,
-    seed_learning_actions, load_actions_cache,
-    seed_learning_resources, load_resources_cache,
-    seed_skill_difficulty, load_difficulty_cache,
-    seed_skill_clusters, load_clusters_cache,
-    seed_video_resources, load_videos_cache,
-    seed_role_configs, load_role_configs_cache,
-    seed_courses,
+    load_skills_cache, load_market_cache, load_skill_recs_cache,
+    load_roadmaps_cache, load_actions_cache, load_resources_cache,
+    load_difficulty_cache, load_clusters_cache, load_videos_cache,
+    load_role_configs_cache,
 )
 seed_skills_taxonomy()
 load_skills_cache()
