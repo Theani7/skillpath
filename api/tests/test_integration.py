@@ -1,16 +1,10 @@
 import io
 import json
 import os
-import tempfile
 import time
 import unittest
 
-# Use a temp file DB for tests (':memory:' creates separate DBs per connection)
-_test_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-_test_db.close()
-os.environ.setdefault("DB_FILE", _test_db.name)
-os.environ.setdefault("GEMINI_API_KEY", "")
-os.environ.setdefault("ENV", "development")
+# Test env (temp DB, no SMTP/Gemini) is configured in conftest.py.
 
 from fastapi.testclient import TestClient
 from api.main import app
