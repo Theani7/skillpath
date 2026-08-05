@@ -1,7 +1,8 @@
 import random
 from datetime import datetime
 
-from api.database import get_skill_recommendations, get_db_connection
+from api.seed_data import get_skill_recommendations
+from api.database import get_db_connection
 
 # Track the last time a simulation was run
 last_scraped_timestamp = None

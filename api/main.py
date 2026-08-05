@@ -166,7 +166,7 @@ logger = logging.getLogger("resume-analyzer")
 logging.basicConfig(level=logging.INFO)
 
 # Seed skills taxonomy and load cache
-from api.database import (
+from api.seed_data import (
     seed_skills_taxonomy, load_skills_cache,
     seed_market_data, load_market_cache,
     seed_skill_recommendations, load_skill_recs_cache,

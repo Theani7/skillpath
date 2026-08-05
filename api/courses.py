@@ -462,7 +462,7 @@ FIELD_KEYWORDS = {
     }
 }
 
-from api.database import get_field_keywords
+from api.seed_data import get_field_keywords
 
 
 def predict_field_with_ai(resume_data: dict) -> str:

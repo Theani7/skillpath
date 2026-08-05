@@ -244,7 +244,7 @@ async def analyze_resume(
         missing_skills_videos = []
         
         from api.courses import predict_field_with_ai, generate_youtube_search_links
-        from api.database import get_skill_recommendations, get_roadmaps, get_resume_videos, get_interview_videos
+        from api.seed_data import get_skill_recommendations, get_roadmaps, get_resume_videos, get_interview_videos
         
         # Call out to our new ML Model to get the closest semantic field
         predicted_field = predict_field_with_ai(resume_data)

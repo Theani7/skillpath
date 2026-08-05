@@ -10,7 +10,6 @@ SKIP_LOCAL_LLM = os.getenv("SKIP_LOCAL_LLM", "false").lower() in ("1", "true", "
 
 def _skill_difficulty(skill: str) -> int:
     """Get skill difficulty from cache."""
-    from api.database import get_skill_difficulty
     return get_skill_difficulty().get(skill.lower(), 2)
 
 
@@ -260,7 +259,8 @@ def compare_resume_to_jd(resume_skills: List[str], jd_text: str) -> Dict[str, An
 
 # ============ FALLBACK FUNCTIONS ============
 
-from api.database import get_skills_taxonomy, get_all_skills, get_role_synonyms, get_skill_aliases, get_db_connection
+from api.seed_data import get_skills_taxonomy, get_all_skills, get_role_synonyms, get_skill_aliases, get_skill_clusters, get_learning_actions, get_learning_resources, get_role_config, get_skill_difficulty
+from api.database import get_db_connection
 
 # Canonical alias → taxonomy skill name.
 # Each key is a variation users write on resumes; the value is the canonical
@@ -896,7 +896,6 @@ def generate_personalized_roadmap(
 
 def _get_role_config(role: str) -> dict:
     """Get role-specific configuration for roadmap generation."""
-    from api.database import get_role_config
     return get_role_config(role)
 
 
@@ -1004,7 +1003,6 @@ def _generate_mastery_roadmap(role: str, found_skills: List[str]) -> List[dict]:
 
 def _group_related_skills(prioritized: List[dict], role: str) -> List[List[dict]]:
     """Group related skills into learning chunks for coherent phases."""
-    from api.database import get_skill_clusters
     skill_clusters = get_skill_clusters()
 
     # Assign each skill to the best matching cluster (first match wins)
@@ -1045,7 +1043,6 @@ def _generate_skill_actions(skill_info: dict, found_skills: List[str], role: str
     skill_lower = skill.lower()
 
     # Get actions from cache
-    from api.database import get_learning_actions
     action_cache = get_learning_actions()
 
     # Get actions for this skill, or generate generic ones
@@ -1084,7 +1081,6 @@ def _generate_skill_actions(skill_info: dict, found_skills: List[str], role: str
 
 def _get_skill_resources(skill: str, role: str) -> List[dict]:
     """Get learning resources for a specific skill."""
-    from api.database import get_learning_resources
     resource_cache = get_learning_resources()
 
     skill_lower = skill.lower()

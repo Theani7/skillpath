@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from api.auth import get_current_admin
-from api.database import get_db_connection, invalidate_all_caches
+from api.seed_data import invalidate_all_caches
+from api.database import get_db_connection
 from api.scraper import simulate_trend_update
 from api.course_scraper import scrape_courses_for_field, FIELD_SEARCH_QUERIES
 

@@ -1,7 +1,7 @@
 import copy
 from typing import Any, Dict, Optional
 
-from api.database import get_industry_trends, get_market_role_aliases
+from api.seed_data import get_industry_trends, get_market_role_aliases
 
 
 def get_market_trends_for_role(role: Optional[str]) -> Dict[str, Any]:

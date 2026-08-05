@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Tuple
 
 from api.market_data import get_market_trends_for_role
 from api.job_hunt_services import _target_categories_for_role
-from api.database import get_skills_taxonomy
+from api.seed_data import get_skills_taxonomy
 
 
 # Action verbs that signal strong, results-oriented bullets
