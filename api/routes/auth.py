@@ -1,9 +1,11 @@
+import hashlib
 import json
 import logging
 import os
+import random
 import secrets
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -22,6 +24,7 @@ from api.auth import (
     hash_token,
 )
 from api.database import get_db_connection
+from api.email_service import email_configured, send_otp_email
 from api.security import get_password_hash, verify_password
 
 logger = logging.getLogger("resume-analyzer")
@@ -31,6 +34,12 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 MAX_LOGIN_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 15
 AUTH_RATE_LIMIT_PER_MINUTE = 20
+
+OTP_LENGTH = 6
+OTP_TTL_SECONDS = 10 * 60
+OTP_MAX_ATTEMPTS = 5
+OTP_RESEND_COOLDOWN_SECONDS = 60
+RESET_TOKEN_TTL_SECONDS = 10 * 60
 
 ENV = os.getenv("ENV", "development").lower()
 IS_PROD = ENV in ("production", "prod")
@@ -85,6 +94,159 @@ async def _extract_refresh_from_request(request: Request) -> Optional[str]:
     return None
 
 
+def _generate_otp() -> str:
+    return f"{random.SystemRandom().randint(0, 10 ** OTP_LENGTH - 1):0{OTP_LENGTH}d}"
+
+
+def _hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def _send_otp(email: str, otp: str, purpose: str) -> dict:
+    """Send an OTP email. Returns {'otp_sent': bool, 'debug_otp': str|None}.
+
+    In development with SMTP unconfigured the OTP is returned to the caller so
+    the flow stays testable. In production a failed delivery surfaces as 503.
+    """
+    if email_configured():
+        sent = send_otp_email(email, otp, purpose)
+        if sent:
+            return {"otp_sent": True, "debug_otp": None}
+        logger.error("Failed to send %s OTP email to %s", purpose, email)
+        return {"otp_sent": False, "debug_otp": None}
+    if not IS_PROD:
+        logger.warning(
+            "SMTP not configured – returning %s OTP for %s in response (dev only).",
+            purpose, email,
+        )
+        return {"otp_sent": False, "debug_otp": otp}
+    return {"otp_sent": False, "debug_otp": None}
+
+
+def _store_otp(cursor, conn, email: str, purpose: str, otp: str) -> None:
+    cursor.execute(
+        "INSERT INTO otp_codes (email, purpose, code_hash, expires_at) VALUES (?, ?, ?, ?)",
+        (email, purpose, _hash_code(otp), int(time.time()) + OTP_TTL_SECONDS),
+    )
+    conn.commit()
+
+
+def _consume_otp(email: str, purpose: str, otp: str) -> Optional[int]:
+    """Validate an OTP. Returns the user id on success, None otherwise.
+
+    Tracks failed attempts and marks the code used on success.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM otp_codes WHERE expires_at < ?",
+            (int(time.time()),),
+        )
+        conn.commit()
+        cursor.execute(
+            "SELECT id, code_hash, attempts FROM otp_codes "
+            "WHERE email = ? AND purpose = ? AND used = 0 "
+            "ORDER BY id DESC LIMIT 1",
+            (email, purpose),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        if int(row["attempts"]) >= OTP_MAX_ATTEMPTS:
+            cursor.execute("UPDATE otp_codes SET used = 1 WHERE id = ?", (row["id"],))
+            conn.commit()
+            return None
+        if _hash_code(otp) != row["code_hash"]:
+            cursor.execute(
+                "UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?",
+                (row["id"],),
+            )
+            conn.commit()
+            return None
+        cursor.execute("UPDATE otp_codes SET used = 1 WHERE id = ?", (row["id"],))
+        cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+        user_row = cursor.fetchone()
+        user_id = user_row["id"] if user_row else None
+        conn.commit()
+        return user_id
+    finally:
+        conn.close()
+
+
+class EmailOnlyRequest(BaseModel):
+    email: EmailStr
+
+
+class EmailOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=OTP_LENGTH, max_length=OTP_LENGTH, pattern=r'^\d+$')
+
+
+class ResendOTPRequest(BaseModel):
+    email: EmailStr
+    purpose: str = Field(default="register", pattern=r'^(register|password_reset)$')
+
+
+class ResendVerificationRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, pattern=r'^[A-Za-z0-9_.-]+$')
+
+
+@router.post("/resend-verification")
+def resend_verification(payload: ResendVerificationRequest, request: Request):
+    """Resend the registration OTP for an unverified account (from the login screen)."""
+    _check_strict_rate_limit(f"resend-verif:{client_ip(request)}")
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, email, email_verified FROM users WHERE username = ?",
+            (payload.username,),
+        )
+        user = cursor.fetchone()
+        if not user or int(user["email_verified"]) == 1:
+            return {"status": "success", "message": "If your account needs verification, a new code has been sent."}
+        email = user["email"]
+        cursor.execute(
+            "SELECT created_at FROM otp_codes WHERE email = ? AND purpose = 'register' "
+            "ORDER BY id DESC LIMIT 1",
+            (email,),
+        )
+        last = cursor.fetchone()
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(
+                    str(last["created_at"]).replace(" ", "T")
+                ).replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                last_dt = None
+            if last_dt and (datetime.now(timezone.utc) - last_dt).total_seconds() < OTP_RESEND_COOLDOWN_SECONDS:
+                remaining = max(1, int(OTP_RESEND_COOLDOWN_SECONDS - (datetime.now(timezone.utc) - last_dt).total_seconds()))
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Please wait {remaining} seconds before requesting a new code.",
+                )
+    finally:
+        conn.close()
+
+    otp = _generate_otp()
+    delivery = _send_otp(email, otp, "register")
+    if not delivery["otp_sent"] and not delivery["debug_otp"]:
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to send the verification email. Please try again later.",
+        )
+    conn = get_db_connection()
+    try:
+        _store_otp(conn.cursor(), conn, email, "register", otp)
+    finally:
+        conn.close()
+    response = {"status": "success", "message": "If your account needs verification, a new code has been sent."}
+    if delivery["debug_otp"]:
+        response["debug_otp"] = delivery["debug_otp"]
+    return response
+
+
 @router.get("/check-username/{username}")
 def check_username(username: str, request: Request):
     _check_strict_rate_limit(f"username-check:{client_ip(request)}")
@@ -115,13 +277,28 @@ def register_user(user: UserRegister, request: Request):
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Email already registered")
 
+        # Generate and deliver the verification OTP before creating the account
+        # so a broken email service never leaves orphan accounts behind.
+        otp = _generate_otp()
+        delivery = _send_otp(user.email, otp, "register")
+        if not delivery["otp_sent"] and not delivery["debug_otp"]:
+            raise HTTPException(
+                status_code=503,
+                detail="Unable to send the verification email. Please try again later.",
+            )
+
         hashed_password = get_password_hash(user.password)
         cursor.execute(
-            "INSERT INTO users (username, email, full_name, hashed_password, role) VALUES (?, ?, ?, ?, 'user')",
+            "INSERT INTO users (username, email, full_name, hashed_password, role, email_verified) "
+            "VALUES (?, ?, ?, ?, 'user', 0)",
             (user.username, user.email, user.full_name, hashed_password)
         )
-        conn.commit()
-        return {"message": "User registered successfully"}
+        _store_otp(cursor, conn, user.email, "register", otp)
+        return {
+            "message": "Registration successful. Check your email for the verification code.",
+            "otp_sent": delivery["otp_sent"],
+            "debug_otp": delivery["debug_otp"],
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -129,6 +306,79 @@ def register_user(user: UserRegister, request: Request):
         raise HTTPException(status_code=500, detail="Database Error")
     finally:
         conn.close()
+
+
+@router.post("/verify-email")
+def verify_email(payload: EmailOTPRequest, request: Request):
+    _check_strict_rate_limit(f"verify-email:{client_ip(request)}")
+    user_id = _consume_otp(payload.email, "register", payload.otp)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "success", "message": "Email verified successfully. You can now sign in."}
+
+
+@router.post("/resend-otp")
+def resend_otp(payload: ResendOTPRequest, request: Request):
+    _check_strict_rate_limit(f"resend-otp:{client_ip(request)}")
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT created_at FROM otp_codes "
+            "WHERE email = ? AND purpose = ? ORDER BY id DESC LIMIT 1",
+            (payload.email, payload.purpose),
+        )
+        last = cursor.fetchone()
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(
+                    str(last["created_at"]).replace(" ", "T")
+                ).replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                last_dt = None
+            if last_dt and (datetime.now(timezone.utc) - last_dt).total_seconds() < OTP_RESEND_COOLDOWN_SECONDS:
+                remaining = max(1, int(OTP_RESEND_COOLDOWN_SECONDS - (datetime.now(timezone.utc) - last_dt).total_seconds()))
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Please wait {remaining} seconds before requesting a new code.",
+                )
+        if payload.purpose == "register":
+            cursor.execute("SELECT id FROM users WHERE email = ? AND email_verified = 0", (payload.email,))
+        else:
+            cursor.execute("SELECT id FROM users WHERE email = ?", (payload.email,))
+        user_row = cursor.fetchone()
+        if not user_row:
+            raise HTTPException(status_code=404, detail="No pending verification found for this email")
+    finally:
+        conn.close()
+
+    otp = _generate_otp()
+    delivery = _send_otp(payload.email, otp, payload.purpose)
+    if not delivery["otp_sent"] and not delivery["debug_otp"]:
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to send the verification email. Please try again later.",
+        )
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        _store_otp(cursor, conn, payload.email, payload.purpose, otp)
+    finally:
+        conn.close()
+    return {
+        "message": "A new verification code has been sent.",
+        "otp_sent": delivery["otp_sent"],
+        "debug_otp": delivery["debug_otp"],
+    }
 
 
 @router.post("/login")
@@ -180,6 +430,13 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
             )
 
         user_dict = dict(user)
+
+        if "email_verified" in user_dict and user_dict["email_verified"] == 0:
+            conn.close()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Please verify your email address first. Check your inbox for the verification code.",
+            )
 
         if "is_active" in user_dict and user_dict["is_active"] == 0:
             conn.close()
@@ -367,35 +624,74 @@ RESET_COOLDOWN_SECONDS = 5 * 60
 @router.post("/request-password-reset")
 def request_password_reset(payload: PasswordResetRequest, request: Request):
     _check_strict_rate_limit(f"pwd-reset:{client_ip(request)}")
+    debug_otp = None
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM users WHERE email = ?", (payload.email,))
         user = cursor.fetchone()
         if user:
-            cooldown_cutoff = int(time.time()) - RESET_COOLDOWN_SECONDS
             cursor.execute(
-                "SELECT created_at FROM password_reset_tokens WHERE user_id = ? ORDER BY id DESC LIMIT 1",
-                (user["id"],),
+                "SELECT created_at FROM otp_codes WHERE email = ? AND purpose = 'password_reset' "
+                "ORDER BY id DESC LIMIT 1",
+                (payload.email,),
             )
             last = cursor.fetchone()
             if last:
                 try:
-                    last_ts = int(datetime.fromisoformat(str(last["created_at"]).replace(" ", "T")).timestamp())
+                    last_dt = datetime.fromisoformat(
+                        str(last["created_at"]).replace(" ", "T")
+                    ).replace(tzinfo=timezone.utc)
                 except (ValueError, TypeError):
-                    last_ts = 0
-                if last_ts and last_ts > cooldown_cutoff:
-                    return {"status": "success", "message": "If the email exists, a reset flow has been created."}
-            token = secrets.token_urlsafe(32)
-            expires_at = int(time.time()) + (60 * 30)
-            cursor.execute(
-                "INSERT OR REPLACE INTO password_reset_tokens(token, user_id, expires_at, used) VALUES (?, ?, ?, 0)",
-                (token, user["id"], expires_at),
-            )
-            conn.commit()
+                    last_dt = None
+                if last_dt and (datetime.now(timezone.utc) - last_dt).total_seconds() < RESET_COOLDOWN_SECONDS:
+                    return {"status": "success", "message": "If the email exists, a reset code has been sent."}
+            otp = _generate_otp()
+            delivery = _send_otp(payload.email, otp, "password_reset")
+            if not delivery["otp_sent"] and not delivery["debug_otp"]:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Unable to send the reset email. Please try again later.",
+                )
+            debug_otp = delivery["debug_otp"]
+            _store_otp(cursor, conn, payload.email, "password_reset", otp)
     finally:
         conn.close()
-    return {"status": "success", "message": "If the email exists, a reset flow has been created."}
+    response = {"status": "success", "message": "If the email exists, a reset code has been sent."}
+    if debug_otp:
+        response["debug_otp"] = debug_otp
+    return response
+
+
+class VerifyResetOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=OTP_LENGTH, max_length=OTP_LENGTH, pattern=r'^\d+$')
+
+
+@router.post("/verify-reset-otp")
+def verify_reset_otp(payload: VerifyResetOTPRequest, request: Request):
+    _check_strict_rate_limit(f"verify-reset-otp:{client_ip(request)}")
+    user_id = _consume_otp(payload.email, "password_reset", payload.otp)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+
+    reset_token = secrets.token_urlsafe(32)
+    expires_at = int(time.time()) + RESET_TOKEN_TTL_SECONDS
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO password_reset_tokens(token, user_id, expires_at, used) VALUES (?, ?, ?, 0)",
+            (reset_token, user_id, expires_at),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {
+        "status": "success",
+        "message": "Code verified. Set your new password.",
+        "reset_token": reset_token,
+    }
 
 
 @router.post("/reset-password")

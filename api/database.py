@@ -20,7 +20,7 @@ ALLOWED_TABLES = frozenset({
     "learning_resources", "skill_difficulty", "skill_clusters",
     "video_resources", "role_configs", "market_trends_cache",
     "job_role_skills", "audit_logs", "user_roadmap_progress",
-    "roadmap_templates",
+    "roadmap_templates", "otp_codes",
 })
 
 DB_FILE = os.getenv("DB_FILE") or os.path.join(
@@ -158,6 +158,21 @@ def init_db():
         ''')
 
         _ensure_column(cursor, 'users', 'is_active', 'INTEGER', '1')
+        _ensure_column(cursor, 'users', 'email_verified', 'INTEGER', '1')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS otp_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email VARCHAR(120) NOT NULL,
+                purpose VARCHAR(30) NOT NULL,
+                code_hash VARCHAR(64) NOT NULL,
+                expires_at INTEGER NOT NULL,
+                attempts INTEGER DEFAULT 0,
+                used INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email, purpose)")
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS market_trends_cache (
