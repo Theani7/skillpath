@@ -1,4 +1,3 @@
-import sqlite3
 import os
 import time
 import json
@@ -6,8 +5,15 @@ import logging
 from contextlib import contextmanager
 from sqlalchemy import create_engine, event
 
-logger = logging.getLogger("resume-analyzer")
-
+from api.db_compat import (
+    get_db_type,
+    get_engine_url,
+    get_connect_args,
+    get_row_factory,
+    get_table_columns,
+    CompatConnection,
+    ph,
+)
 from api.seed_defaults import (
     CORE_SKILLS_BY_ROLE,
     DEFAULT_ROLES,
@@ -15,6 +21,9 @@ from api.seed_defaults import (
     DEFAULT_ROADMAPS,
 )
 
+logger = logging.getLogger("resume-analyzer")
+
+IS_POSTGRES = get_db_type() == "postgresql"
 
 ALLOWED_TABLES = frozenset({
     "user_data", "user_feedback", "users", "courses",
@@ -31,28 +40,30 @@ ALLOWED_TABLES = frozenset({
     "roadmap_templates", "otp_codes",
 })
 
-DB_FILE = os.getenv("DB_FILE") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "cv.db"
-)
-
 engine = create_engine(
-    f"sqlite:///{DB_FILE}",
-    connect_args={"check_same_thread": False},
+    get_engine_url(),
+    connect_args=get_connect_args(),
 )
 
 
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.close()
-    dbapi_connection.row_factory = sqlite3.Row
+    if get_db_type() == "sqlite":
+        import sqlite3
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+        dbapi_connection.row_factory = sqlite3.Row
 
 
 def get_db_connection():
-    return engine.raw_connection()
+    raw = engine.raw_connection()
+    if get_db_type() == "postgresql":
+        import psycopg2.extras
+        raw.cursor_factory = psycopg2.extras.RealDictCursor
+    return CompatConnection(raw)
 
 
 @contextmanager
@@ -67,8 +78,7 @@ def get_db():
 def _ensure_column(cursor, table: str, col: str, typedef: str, default=None) -> None:
     if table not in ALLOWED_TABLES:
         raise ValueError(f"Table '{table}' is not in the allowed tables whitelist")
-    cursor.execute(f"PRAGMA table_info({table})")
-    existing = {row[1] for row in cursor.fetchall()}
+    existing = get_table_columns(cursor, table)
     if col not in existing:
         if default is not None:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef} DEFAULT {default}")
@@ -597,17 +607,21 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_data_predicted_field ON user_data(Predicted_Field)")
 
         # Add content_hash column to user_data if missing (for cache cleanup on delete)
-        cursor.execute("PRAGMA table_info(user_data)")
-        ud_cols = {r[1] for r in cursor.fetchall()}
+        ud_cols = get_table_columns(cursor, "user_data")
         if 'content_hash' not in ud_cols:
             cursor.execute("ALTER TABLE user_data ADD COLUMN content_hash VARCHAR(64) DEFAULT NULL")
 
         # Fix is_required flags: mark core skills as required, others as nice-to-have
-        for role_id, role_title, skill_name in cursor.fetchall():
+        cursor.execute("SELECT jr.id, jr.title, js.skill_name FROM job_role_skills js JOIN job_roles jr ON js.job_role_id = jr.id")
+        role_skill_rows = cursor.fetchall()
+        for row in role_skill_rows:
+            role_id = row["id"] if isinstance(row, dict) else row[0]
+            role_title = row["title"] if isinstance(row, dict) else row[1]
+            skill_name = row["skill_name"] if isinstance(row, dict) else row[2]
             core = CORE_SKILLS_BY_ROLE.get(role_title, set())
             desired = 1 if skill_name in core else 0
             cursor.execute(
-                "UPDATE job_role_skills SET is_required = ? WHERE job_role_id = ? AND skill_name = ?",
+                f"UPDATE job_role_skills SET is_required = {ph()} WHERE job_role_id = {ph()} AND skill_name = {ph()}",
                 (desired, role_id, skill_name)
             )
 
@@ -620,8 +634,10 @@ def init_db():
         cursor.execute("DELETE FROM rate_limits WHERE updated_at < ?", (int(time.time() // 60) - 5,))
 
         # Seed default job roles if empty
-        cursor.execute("SELECT COUNT(*) FROM job_roles")
-        if cursor.fetchone()[0] == 0:
+        cursor.execute("SELECT COUNT(*) as cnt FROM job_roles")
+        row = cursor.fetchone()
+        count = row["cnt"] if isinstance(row, dict) else row[0]
+        if count == 0:
             for title, desc, category in DEFAULT_ROLES:
                 cursor.execute(
                     "INSERT INTO job_roles (title, description, category) VALUES (?, ?, ?)",

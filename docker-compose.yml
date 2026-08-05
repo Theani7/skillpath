@@ -1,4 +1,20 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: skillpath
+      POSTGRES_PASSWORD: skillpath
+      POSTGRES_DB: skillpath
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillpath"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -7,11 +23,13 @@ services:
       - "8000:8000"
     env_file: .env
     environment:
-      - DB_FILE=/app/data/cv.db
+      - DATABASE_URL=postgresql://skillpath:skillpath@db:5432/skillpath
       - CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
     volumes:
       - ./api:/app/api
-      - db-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 10s
@@ -28,4 +46,4 @@ services:
       - backend
 
 volumes:
-  db-data:
+  pg-data:

@@ -831,7 +831,8 @@ def create_roadmap(role_id: int, body: RoadmapInput, current_admin: dict = Depen
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Job role not found")
         cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM career_roadmaps WHERE job_role_id = ?", (role_id,))
-        next_order = cursor.fetchone()[0]
+        _row = cursor.fetchone()
+        next_order = _row[0] if _row else 1
         cursor.execute(
             "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (?, ?, ?, ?, ?)",
             (role_id, body.title, body.description, body.duration_weeks, next_order)
@@ -1031,7 +1032,8 @@ def bulk_import_roadmap(role_id: int, body: BulkRoadmapImport, current_admin: di
             raise HTTPException(status_code=400, detail="No valid steps found. Use format: Title | Description | Weeks | Skills | Resources")
 
         cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM career_roadmaps WHERE job_role_id = ?", (role_id,))
-        next_order = cursor.fetchone()[0]
+        _row = cursor.fetchone()
+        next_order = _row[0] if _row else 1
         cursor.execute(
             "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (?, ?, ?, ?, ?)",
             (role_id, title, description, duration_weeks, next_order)
@@ -1081,7 +1083,8 @@ def ai_generate_roadmap(role_id: int, current_admin: dict = Depends(get_current_
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM career_roadmaps WHERE job_role_id = ?", (role_id,))
-        next_order = cursor.fetchone()[0]
+        _row = cursor.fetchone()
+        next_order = _row[0] if _row else 1
         cursor.execute(
             "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (?, ?, ?, ?, ?)",
             (role_id, roadmap_data.get("title", f"{role_title} Roadmap"), roadmap_data.get("description", ""), roadmap_data.get("duration_weeks", 16), next_order)
