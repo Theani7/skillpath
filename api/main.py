@@ -29,23 +29,24 @@ import json
 # ---------------------------------------------------------------------------
 def _validate_env():
     errors = []
+    warnings = []
 
     env = os.getenv("ENV", "development").lower()
     is_prod = env in ("production", "prod")
 
     gemini_key = os.getenv("GEMINI_API_KEY", "")
-    if not gemini_key or gemini_key == "test-key":
+    if not gemini_key or gemini_key in ("your_gemini_api_key_here", "test-key"):
         if is_prod:
             errors.append("GEMINI_API_KEY is required in production.")
         else:
-            logger.warning("GEMINI_API_KEY is missing or dummy – Gemini analysis will be unavailable.")
+            warnings.append("GEMINI_API_KEY is missing or dummy – Gemini analysis will be unavailable.")
 
     jwt_secret = os.getenv("JWT_SECRET_KEY", "")
-    if not jwt_secret or len(jwt_secret) < 32:
+    if not jwt_secret or jwt_secret.startswith("generate_a_random") or len(jwt_secret) < 32:
         if is_prod:
             errors.append("JWT_SECRET_KEY must be >= 32 characters in production.")
         else:
-            logger.warning("JWT_SECRET_KEY is missing or short – using random key (sessions reset on restart).")
+            warnings.append("JWT_SECRET_KEY is missing or short – using random key (sessions reset on restart).")
 
     db_file = os.getenv("DB_FILE") or os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "cv.db"
@@ -57,6 +58,14 @@ def _validate_env():
     cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
     if is_prod and "*" in cors_raw:
         errors.append("CORS_ORIGINS must not include '*' in production.")
+
+    admin_pass = os.getenv("ADMIN_PASSWORD", "")
+    if is_prod and admin_pass in ("admin123", "change_me_in_production", ""):
+        errors.append("ADMIN_PASSWORD must be changed from default in production.")
+
+    if warnings:
+        for w in warnings:
+            logger.warning(w)
 
     if errors:
         msg = "Startup validation failed:\n  - " + "\n  - ".join(errors)
