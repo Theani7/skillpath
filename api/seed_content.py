@@ -1,0 +1,378 @@
+'''Default content for reference tables.
+
+Pure data used by the seed functions in api/seeders.py: role aliases,
+learning action templates, learning resources, skill clusters, and
+role configs.
+'''
+
+ROLE_ALIASES = {
+    "ios development": "IOS Development",
+    "ui ux development": "UI-UX Development",
+    "ui/ux development": "UI-UX Development",
+    "ui/ux design": "UI-UX Development",
+    "web developer": "Web Development",
+    "web development": "Web Development",
+    "data scientist": "Data Science",
+    "data science": "Data Science",
+    "data engineer": "Data Engineering",
+    "data engineering": "Data Engineering",
+    "machine learning engineer": "Machine Learning",
+    "machine learning": "Machine Learning",
+    "ml engineer": "Machine Learning",
+    "cloud engineer": "Cloud Engineering",
+    "cloud engineering": "Cloud Engineering",
+    "cloud architect": "Cloud Architecture",
+    "cloud architecture": "Cloud Architecture",
+    "product manager": "Product Management",
+    "product management": "Product Management",
+    "business analyst": "Business Analysis",
+    "business analysis": "Business Analysis",
+    "technical writer": "Technical Writing",
+    "technical writing": "Technical Writing",
+    "it support specialist": "IT Support",
+    "it support": "IT Support",
+    "network administrator": "Network Administration",
+    "network admin": "Network Administration",
+    "devops engineer": "DevOps",
+    "devops": "DevOps",
+    "android developer": "Android Development",
+    "android development": "Android Development",
+    "ios developer": "IOS Development",
+    "qa engineer": "Quality Assurance",
+    "quality assurance": "Quality Assurance",
+    "software engineer": "Software Engineering",
+    "software engineering": "Software Engineering",
+    "frontend developer": "Frontend Development",
+    "frontend development": "Frontend Development",
+    "backend developer": "Backend Development",
+    "backend development": "Backend Development",
+    "full stack developer": "Full Stack Development",
+    "full stack development": "Full Stack Development",
+    "cyber security": "Cybersecurity",
+    "cybersecurity": "Cybersecurity",
+    "information security": "Cybersecurity",
+    "mobile developer": "Mobile Development",
+    "mobile development": "Mobile Development",
+}
+
+
+action_templates = {
+    "react": [
+        "Learn React fundamentals: components, props, state, and hooks",
+        "Build a CRUD app with React (e.g., todo list, weather app)",
+        "Practice React patterns: context, custom hooks, performance optimization",
+    ],
+    "typescript": [
+        "Learn TypeScript basics: types, interfaces, generics",
+        "Convert an existing JavaScript project to TypeScript",
+        "Practice advanced types: unions, generics, utility types",
+    ],
+    "next.js": [
+        "Learn Next.js basics: pages, routing, API routes",
+        "Build a full-stack app with Next.js and a database",
+        "Practice SSR/SSG and optimization techniques",
+    ],
+    "vue": [
+        "Learn Vue fundamentals: components, reactivity, directives",
+        "Build a single-page app with Vue Router and Pinia",
+        "Practice Vue 3 Composition API patterns",
+    ],
+    "angular": [
+        "Learn Angular fundamentals: components, services, modules",
+        "Build a full Angular app with routing and HTTP client",
+        "Practice RxJS and state management patterns",
+    ],
+    "python": [
+        "Complete Python basics: data types, control flow, functions",
+        "Build a Python project with classes and modules",
+        "Practice Pythonic patterns: list comprehensions, decorators, context managers",
+    ],
+    "django": [
+        "Set up Django project and create models",
+        "Build views, templates, and URL routing",
+        "Implement authentication and REST API endpoints",
+    ],
+    "flask": [
+        "Create Flask app with routes and templates",
+        "Add database integration with SQLAlchemy",
+        "Build REST API with Flask-RESTful or Flask RESTX",
+    ],
+    "fastapi": [
+        "Build a FastAPI app with path parameters and request bodies",
+        "Add Pydantic models and validation",
+        "Implement authentication, middleware, and background tasks",
+    ],
+    "node.js": [
+        "Learn Node.js fundamentals: modules, events, file I/O",
+        "Build an Express server with middleware",
+        "Implement authentication and database integration",
+    ],
+    "express": [
+        "Set up Express app with routing and middleware",
+        "Build RESTful API endpoints",
+        "Add authentication, validation, and error handling",
+    ],
+    "docker": [
+        "Learn Docker basics: images, containers, volumes",
+        "Create a Dockerfile for your application",
+        "Use Docker Compose for multi-container apps",
+    ],
+    "kubernetes": [
+        "Learn Kubernetes basics: pods, services, deployments",
+        "Deploy an app to a Kubernetes cluster",
+        "Configure scaling, health checks, and rolling updates",
+    ],
+    "aws": [
+        "Explore AWS free tier: EC2, S3, RDS",
+        "Deploy a web app on EC2 with RDS database",
+        "Practice IAM, VPC, and CloudFront setup",
+    ],
+    "terraform": [
+        "Learn Terraform basics: providers, resources, state",
+        "Write Terraform for AWS infrastructure",
+        "Manage state and use modules for reusability",
+    ],
+    "machine learning": [
+        "Learn ML basics: supervised vs unsupervised learning",
+        "Build a model with scikit-learn on a real dataset",
+        "Practice model evaluation: cross-validation, metrics",
+    ],
+    "deep learning": [
+        "Learn neural network fundamentals",
+        "Build a deep learning model with TensorFlow or PyTorch",
+        "Practice CNNs, RNNs, and transfer learning",
+    ],
+    "tensorflow": [
+        "Complete TensorFlow 2.x tutorials",
+        "Build a neural network with Keras Sequential API",
+        "Practice model training, evaluation, and deployment",
+    ],
+    "pytorch": [
+        "Learn PyTorch tensors and autograd",
+        "Build a neural network with nn.Module",
+        "Practice training loops and GPU acceleration",
+    ],
+    "pandas": [
+        "Learn pandas: Series, DataFrame, indexing",
+        "Practice data cleaning and transformation",
+        "Build data analysis projects with real datasets",
+    ],
+    "sql": [
+        "Learn SQL basics: SELECT, JOIN, WHERE, GROUP BY",
+        "Practice complex queries with subqueries and CTEs",
+        "Build a database schema and write optimization queries",
+    ],
+    "postgresql": [
+        "Set up PostgreSQL and learn advanced SQL",
+        "Practice indexing, partitioning, and query optimization",
+        "Build a full app with psycopg2 or SQLAlchemy",
+    ],
+    "mongodb": [
+        "Learn MongoDB basics: documents, collections, CRUD",
+        "Practice aggregation pipelines",
+        "Integrate with a backend framework",
+    ],
+    "react native": [
+        "Set up React Native project and learn components",
+        "Build a cross-platform mobile app",
+        "Practice navigation, state, and native modules",
+    ],
+    "flutter": [
+        "Learn Flutter/Dart basics: widgets, layouts, state",
+        "Build a complete mobile app with navigation",
+        "Practice animations, custom widgets, and platform integration",
+    ],
+    "swift": [
+        "Learn Swift basics: types, optionals, protocols",
+        "Build SwiftUI views and navigation",
+        "Practice Core Data, networking, and async/await",
+    ],
+    "kotlin": [
+        "Learn Kotlin basics: null safety, coroutines, extensions",
+        "Build an Android app with Jetpack Compose",
+        "Practice Retrofit, Room, and dependency injection",
+    ],
+}
+
+
+resource_map = {
+    "react": [
+        {"title": "React Official Tutorial", "url": "https://react.dev/learn", "type": "docs"},
+        {"title": "React Crash Course (Free)", "url": "https://youtu.be/Dorf8i6lCuk", "type": "video"},
+    ],
+    "typescript": [
+        {"title": "TypeScript Handbook", "url": "https://www.typescriptlang.org/docs/handbook/", "type": "docs"},
+        {"title": "TypeScript Tutorial (Free)", "url": "https://youtu.be/BwuLxPH8IDs", "type": "video"},
+    ],
+    "next.js": [
+        {"title": "Next.js Learn Course", "url": "https://nextjs.org/learn", "type": "docs"},
+        {"title": "Next.js Crash Course", "url": "https://youtu.be/mTz0GXj8NN0", "type": "video"},
+    ],
+    "vue": [
+        {"title": "Vue.js Official Guide", "url": "https://vuejs.org/guide/introduction.html", "type": "docs"},
+        {"title": "Vue 3 Crash Course (Free)", "url": "https://youtu.be/FXpIoQ_rT_c", "type": "video"},
+    ],
+    "angular": [
+        {"title": "Angular Official Tutorial", "url": "https://angular.dev/tutorial", "type": "docs"},
+        {"title": "Angular Crash Course (Free)", "url": "https://youtu.be/3dHNOWTI7H8", "type": "video"},
+    ],
+    "python": [
+        {"title": "Python Official Tutorial", "url": "https://docs.python.org/3/tutorial/", "type": "docs"},
+        {"title": "Python for Everybody (Free)", "url": "https://www.py4e.com/", "type": "course"},
+    ],
+    "django": [
+        {"title": "Django Official Tutorial", "url": "https://docs.djangoproject.com/en/stable/intro/tutorial01/", "type": "docs"},
+        {"title": "Django Crash Course (Free)", "url": "https://youtu.be/e1IyzVyrLSU", "type": "video"},
+    ],
+    "flask": [
+        {"title": "Flask Official Documentation", "url": "https://flask.palletsprojects.com/en/3.0.x/tutorial/", "type": "docs"},
+        {"title": "Flask Crash Course (Free)", "url": "https://youtu.be/Z1RJmh_OqeA", "type": "video"},
+    ],
+    "fastapi": [
+        {"title": "FastAPI Official Tutorial", "url": "https://fastapi.tiangolo.com/tutorial/", "type": "docs"},
+        {"title": "FastAPI Course (Free)", "url": "https://youtu.be/0sOvCWFmrtA", "type": "video"},
+    ],
+    "node.js": [
+        {"title": "Node.js Official Guides", "url": "https://nodejs.org/en/learn/getting-started/introduction-to-nodejs", "type": "docs"},
+        {"title": "Node.js Crash Course", "url": "https://youtu.be/fBNz5xF-Kx4", "type": "video"},
+    ],
+    "express": [
+        {"title": "Express.js Official Guide", "url": "https://expressjs.com/en/guide/routing.html", "type": "docs"},
+        {"title": "Express Crash Course (Free)", "url": "https://youtu.be/CnH3kAXSrmU", "type": "video"},
+    ],
+    "docker": [
+        {"title": "Docker Official Tutorial", "url": "https://docs.docker.com/get-started/", "type": "docs"},
+        {"title": "Docker Crash Course (Free)", "url": "https://youtu.be/fqMOX6JJhGo", "type": "video"},
+    ],
+    "kubernetes": [
+        {"title": "Kubernetes Basics", "url": "https://kubernetes.io/docs/tutorials/kubernetes-basics/", "type": "docs"},
+        {"title": "K8s Crash Course (Free)", "url": "https://youtu.be/X48VuDVv0do", "type": "video"},
+    ],
+    "aws": [
+        {"title": "AWS Free Tier Training", "url": "https://aws.amazon.com/free/", "type": "course"},
+        {"title": "AWS Cloud Practitioner", "url": "https://aws.amazon.com/certification/certified-cloud-practitioner/", "type": "cert"},
+    ],
+    "terraform": [
+        {"title": "Terraform Official Tutorials", "url": "https://developer.hashicorp.com/terraform/tutorials", "type": "docs"},
+        {"title": "Terraform Crash Course (Free)", "url": "https://youtu.be/l5k1ai_GBDE", "type": "video"},
+    ],
+    "machine learning": [
+        {"title": "ML Crash Course by Google", "url": "https://developers.google.com/machine-learning/crash-course", "type": "course"},
+        {"title": "Machine Learning by Andrew Ng", "url": "https://www.coursera.org/learn/machine-learning", "type": "course"},
+    ],
+    "deep learning": [
+        {"title": "Deep Learning Specialization", "url": "https://www.coursera.org/specializations/deep-learning", "type": "course"},
+        {"title": "Fast.ai Practical Deep Learning", "url": "https://course.fast.ai/", "type": "course"},
+    ],
+    "tensorflow": [
+        {"title": "TensorFlow Official Tutorials", "url": "https://www.tensorflow.org/tutorials", "type": "docs"},
+        {"title": "TensorFlow Crash Course", "url": "https://www.tensorflow.org/tutorials/quickstart/beginner", "type": "docs"},
+    ],
+    "pytorch": [
+        {"title": "PyTorch Official Tutorial", "url": "https://pytorch.org/tutorials/", "type": "docs"},
+        {"title": "PyTorch for Deep Learning", "url": "https://www.youtube.com/watch?v=aircAruvnKk", "type": "video"},
+    ],
+    "pandas": [
+        {"title": "Pandas Official Documentation", "url": "https://pandas.pydata.org/docs/getting_started/introduction.html", "type": "docs"},
+        {"title": "Pandas Tutorial (Free)", "url": "https://youtu.be/vmEHCJofslg", "type": "video"},
+    ],
+    "sql": [
+        {"title": "SQL Tutorial", "url": "https://www.w3schools.com/sql/", "type": "docs"},
+        {"title": "SQL Crash Course (Free)", "url": "https://youtu.be/HXV3zeQKqGY", "type": "video"},
+    ],
+    "postgresql": [
+        {"title": "PostgreSQL Official Documentation", "url": "https://www.postgresql.org/docs/current/tutorial.html", "type": "docs"},
+        {"title": "PostgreSQL Crash Course (Free)", "url": "https://youtu.be/qw--VlpxnE4", "type": "video"},
+    ],
+    "mongodb": [
+        {"title": "MongoDB Official Tutorial", "url": "https://www.mongodb.com/docs/manual/tutorial/getting-started/", "type": "docs"},
+        {"title": "MongoDB Crash Course (Free)", "url": "https://youtu.be/-56x56UppqQ", "type": "video"},
+    ],
+    "react native": [
+        {"title": "React Native Official Guide", "url": "https://reactnative.dev/docs/getting-started", "type": "docs"},
+        {"title": "React Native Crash Course (Free)", "url": "https://youtu.be/0-S5a9eLho8", "type": "video"},
+    ],
+    "flutter": [
+        {"title": "Flutter Official Documentation", "url": "https://docs.flutter.dev/get-started/install", "type": "docs"},
+        {"title": "Flutter Crash Course (Free)", "url": "https://youtu.be/1gDIFuM9sKY", "type": "video"},
+    ],
+    "swift": [
+        {"title": "Swift Official Documentation", "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/", "type": "docs"},
+        {"title": "SwiftUI Tutorial", "url": "https://developer.apple.com/tutorials/swiftui", "type": "docs"},
+    ],
+    "kotlin": [
+        {"title": "Kotlin Official Documentation", "url": "https://kotlinlang.org/docs/home.html", "type": "docs"},
+        {"title": "Kotlin Crash Course (Free)", "url": "https://youtu.be/FdNLHkYEXEo", "type": "video"},
+    ],
+}
+
+
+skill_clusters = {
+    "react_ecosystem": ["react", "next.js", "typescript", "tailwind", "redux", "zustand"],
+    "vue_ecosystem": ["vue", "nuxt.js", "vuex", "pinia"],
+    "python_backend": ["django", "flask", "fastapi", "python"],
+    "java_backend": ["java", "spring boot", "hibernate"],
+    "node_backend": ["node.js", "express", "mongodb", "graphql"],
+    "cloud_aws": ["aws", "terraform", "docker", "kubernetes", "ci/cd"],
+    "cloud_azure": ["azure", "terraform", "docker", "kubernetes", "ci/cd"],
+    "data_science": ["python", "pandas", "numpy", "matplotlib", "seaborn", "statistics"],
+    "ml_engineering": ["machine learning", "deep learning", "tensorflow", "pytorch", "scikit-learn"],
+    "mobile_cross": ["react native", "flutter", "dart"],
+    "mobile_native": ["swift", "kotlin", "swiftui", "jetpack compose"],
+    "devops_tools": ["docker", "kubernetes", "jenkins", "ci/cd", "terraform", "ansible"],
+    "databases": ["sql", "postgresql", "mysql", "mongodb", "redis", "elasticsearch"],
+    "testing": ["testing", "unit testing", "integration testing", "selenium", "qa"],
+}
+
+
+role_configs = {
+    "software engineer": {
+        "project_types": ["full-stack web app", "REST API with authentication", "microservices architecture"],
+        "interview_focus": ["system design", "data structures", "algorithms"],
+        "portfolio_emphasis": "GitHub contributions and code quality",
+        "key_tools": ["Git", "CI/CD", "testing frameworks"],
+    },
+    "frontend": {
+        "project_types": ["interactive web app", "component library", "responsive dashboard"],
+        "interview_focus": ["UI/UX discussions", "performance optimization", "accessibility"],
+        "portfolio_emphasis": "Live demos and design thinking",
+        "key_tools": ["browser DevTools", "Lighthouse", "Figma"],
+    },
+    "backend": {
+        "project_types": ["REST API with database", "microservice with Docker", "real-time WebSocket app"],
+        "interview_focus": ["API design", "database optimization", "scalability"],
+        "portfolio_emphasis": "API documentation and system architecture",
+        "key_tools": ["Postman", "database tools", "monitoring"],
+    },
+    "data scientist": {
+        "project_types": ["end-to-end ML pipeline", "data visualization dashboard", "predictive model deployment"],
+        "interview_focus": ["statistics", "ML algorithms", "data cleaning"],
+        "portfolio_emphasis": "Jupyter notebooks and Kaggle competitions",
+        "key_tools": ["Jupyter", "pandas", "scikit-learn"],
+    },
+    "devops": {
+        "project_types": ["CI/CD pipeline", "infrastructure as code", "monitoring dashboard"],
+        "interview_focus": ["infrastructure design", "incident response", "automation"],
+        "portfolio_emphasis": "automation scripts and infrastructure diagrams",
+        "key_tools": ["Terraform", "Kubernetes", "monitoring tools"],
+    },
+    "mobile developer": {
+        "project_types": ["cross-platform app", "native mobile app", "app with backend integration"],
+        "interview_focus": ["mobile UX", "performance", "offline functionality"],
+        "portfolio_emphasis": "App Store links and user feedback",
+        "key_tools": ["mobile IDE", "emulators", "testing frameworks"],
+    },
+    "full stack": {
+        "project_types": ["full-stack SaaS", "real-time web app", "e-commerce platform"],
+        "interview_focus": ["system design", "full-stack debugging", "architecture"],
+        "portfolio_emphasis": "deployed applications and end-to-end ownership",
+        "key_tools": ["frontend frameworks", "backend frameworks", "databases"],
+    },
+    "cybersecurity": {
+        "project_types": ["security audit", "vulnerability scanner", "security automation tool"],
+        "interview_focus": ["threat modeling", "incident response", "compliance frameworks"],
+        "portfolio_emphasis": "CTF competitions and security certifications",
+        "key_tools": ["Wireshark", "Burp Suite", "SIEM tools"],
+    },
+}
+
