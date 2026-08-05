@@ -1,6 +1,6 @@
 import { Check, CheckCircle } from 'lucide-react';
 
-const MatchedSkills = (matchedSkills) => {
+const MatchedSkills = ({ matchedSkills }) => {
   return (
         <div className="card" style={{ padding: '24px' }}>
           <h3 style={{

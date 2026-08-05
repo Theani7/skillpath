@@ -1,6 +1,6 @@
 import { DollarSign, Target } from 'lucide-react';
 
-const MarketInsights = (trends) => {
+const MarketInsights = ({ trends }) => {
   return (
         <div className="card" style={{ padding: '24px' }}>
           <h3 style={{

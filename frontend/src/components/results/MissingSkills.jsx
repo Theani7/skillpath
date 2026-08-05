@@ -1,6 +1,6 @@
 import { XCircle } from 'lucide-react';
 
-const MissingSkills = (missingSkills) => {
+const MissingSkills = ({ missingSkills }) => {
   return (
         <div className="card" style={{ padding: '24px' }}>
           <h3 style={{

@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Target } from 'lucide-react';
 
-const TargetMatching = (matchScore, targetRole) => {
+const TargetMatching = ({ matchScore, targetRole }) => {
   return (
         <div className="card" style={{ padding: '24px' }}>
           <h3 style={{

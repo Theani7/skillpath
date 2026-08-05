@@ -1,6 +1,6 @@
 
 
-const TitleBlock = (targetRole) => {
+const TitleBlock = ({ targetRole }) => {
   return (
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
         <h1 style={{

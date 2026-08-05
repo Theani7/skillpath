@@ -1,7 +1,7 @@
 import AnimatedScore from '../AnimatedScore';
 import badge from './badge';
 
-const ScoreOverview = (resumeScore, feedbackMsgs, predictedField, resumeInfo) => {
+const ScoreOverview = ({ resumeScore, feedbackMsgs, predictedField, resumeInfo }) => {
   return (
       <div className="card" style={{ padding: '40px 24px', marginBottom: '20px' }}>
         <div style={{

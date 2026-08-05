@@ -1,6 +1,6 @@
 import { Check, Send, Star } from 'lucide-react';
 
-const FeedbackForm = (feedbackSent, loading, rating, hoverRating, onRate, onHover, onSubmit) => {
+const FeedbackForm = ({ feedbackSent, loading, rating, hoverRating, onRate, onHover, onSubmit }) => {
   return (
       <div style={{
         borderRadius: 'var(--radius-xl)',

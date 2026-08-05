@@ -1,7 +1,7 @@
 import { Award } from 'lucide-react';
 import badge from './badge';
 
-const ScoreBreakdown = (scoreBreakdown) => {
+const ScoreBreakdown = ({ scoreBreakdown }) => {
   return (
         <div className="card" style={{ padding: '28px', marginBottom: '20px' }}>
           <h3 style={{

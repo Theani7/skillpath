@@ -1,7 +1,7 @@
 import { Briefcase } from 'lucide-react';
 import Roadmap from '../Roadmap';
 
-const RoadmapCard = (roadmap) => {
+const RoadmapCard = ({ roadmap }) => {
   return (
         <div className="card" style={{ padding: '28px', marginBottom: '20px' }}>
           <h3 style={{

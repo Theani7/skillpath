@@ -1,6 +1,6 @@
 import { ArrowLeft, Target } from 'lucide-react';
 
-const HeaderRow = (onReset, targetRole) => {
+const HeaderRow = ({ onReset, targetRole }) => {
   return (
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',

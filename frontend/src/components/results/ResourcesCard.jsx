@@ -1,7 +1,7 @@
 import { BookOpen, PlayCircle } from 'lucide-react';
 import badge from './badge';
 
-const ResourcesCard = (tutorials) => {
+const ResourcesCard = ({ tutorials }) => {
   return (
         <div className="card" style={{ padding: '28px', marginBottom: '20px' }}>
           <div style={{

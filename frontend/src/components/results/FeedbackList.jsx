@@ -1,6 +1,6 @@
 import { TrendingUp } from 'lucide-react';
 
-const FeedbackList = (feedbackMsgs) => {
+const FeedbackList = ({ feedbackMsgs }) => {
   return (
         <div className="card" style={{ padding: '24px', marginBottom: '20px' }}>
           <h3 style={{
