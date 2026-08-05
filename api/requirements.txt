@@ -15,3 +15,6 @@ email-validator>=2.2.0
 httpx>=0.28.0
 beautifulsoup4>=4.12.0
 pytest>=8.0.0
+
+# urllib3 v2 warns on LibreSSL builds (macOS Python); v1.26 is fully supported
+urllib3>=1.26,<2
