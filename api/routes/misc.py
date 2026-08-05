@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from api.auth import get_current_user
 from api.database import get_db_connection
-from api.job_hunt_services import get_translations
+from api.i18n import get_translations
 from api.scraper import get_scraper_status
 
 logger = logging.getLogger("resume-analyzer")

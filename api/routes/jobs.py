@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 from api.auth import get_current_optional_user, get_current_user
 from api.career_services import generate_interview_questions, generate_job_matches, rank_candidates
 from api.extractor import rewrite_resume_with_gemini, simulate_interview_turn
-from api.job_hunt_services import compare_resume_to_jd, recommend_projects, rewrite_resume_fallback
+from api.skill_matching import compare_resume_to_jd
+from api.roadmap_services import recommend_projects
+from api.resume_parser import rewrite_resume_fallback
 from api.career_services import rewrite_resume_bullets_fallback
 
 logger = logging.getLogger("resume-analyzer")

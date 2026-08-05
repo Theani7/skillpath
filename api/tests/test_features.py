@@ -9,12 +9,10 @@ from api.career_services import (
     generate_job_matches,
     rank_candidates,
 )
-from api.job_hunt_services import (
-    compare_resume_to_jd,
-    recommend_projects,
-    get_translations,
-    parse_resume_fallback,
-)
+from api.skill_matching import compare_resume_to_jd
+from api.roadmap_services import recommend_projects
+from api.i18n import get_translations
+from api.resume_parser import parse_resume_fallback
 
 
 class FeatureTests(unittest.TestCase):

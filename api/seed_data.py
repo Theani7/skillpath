@@ -15,7 +15,7 @@ logger = logging.getLogger("resume-analyzer")
 def seed_skills_taxonomy():
     """Seed the skills taxonomy tables with default data."""
     from api.skills_taxonomy import SKILLS_TAXONOMY
-    from api.job_hunt_services import ROLE_SYNONYMS, _SKILL_ALIASES
+    from api.skill_matching import ROLE_SYNONYMS, _SKILL_ALIASES
 
     conn = get_db_connection()
     try:
@@ -428,8 +428,8 @@ def seed_roadmap_templates():
 
 def seed_learning_actions():
     """Seed learning_actions table with default data."""
-    from api.job_hunt_services import _SKILL_DIFFICULTY
-    # action_templates from job_hunt_services.py
+    from api.skill_matching import _SKILL_DIFFICULTY
+    # action_templates from skill_matching.py
     action_templates = {
         "react": [
             "Learn React fundamentals: components, props, state, and hooks",
@@ -730,7 +730,7 @@ def seed_learning_resources():
 
 def seed_skill_difficulty():
     """Seed skill_difficulty table with default data."""
-    from api.job_hunt_services import _SKILL_DIFFICULTY
+    from api.skill_matching import _SKILL_DIFFICULTY
 
     conn = get_db_connection()
     try:

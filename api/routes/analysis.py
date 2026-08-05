@@ -17,7 +17,7 @@ from api.career_services import compute_resume_score_breakdown, generate_job_mat
 from api.database import get_db_connection
 from api.exceptions import LLMServiceException, ResumeParseException
 from api.extractor import extract_text_from_docx, extract_text_from_pdf, parse_resume_with_gemini
-from api.job_hunt_services import parse_resume_fallback
+from api.resume_parser import parse_resume_fallback
 from api.local_llm import parse_resume_with_local_llm
 from api.market_data import get_market_trends_for_role
 

@@ -3,7 +3,7 @@ import re
 from typing import Any, Dict, List, Tuple
 
 from api.market_data import get_market_trends_for_role
-from api.job_hunt_services import _target_categories_for_role
+from api.skill_matching import _target_categories_for_role
 from api.seed_data import get_skills_taxonomy
 
 
@@ -186,7 +186,7 @@ def compute_resume_score_breakdown(resume_data: Dict[str, Any], target_role: str
 
         # If a target role is provided, score by RELEVANT skills (from job_role_skills)
         if target_role:
-            from api.job_hunt_services import _get_role_skills_from_db, _get_required_skills_from_db
+            from api.skill_matching import _get_role_skills_from_db, _get_required_skills_from_db
             role_skills = _get_role_skills_from_db(target_role)
             required_skills = _get_required_skills_from_db(target_role)
             role_skills_lower = {s.lower() for s in role_skills}
