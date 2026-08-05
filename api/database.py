@@ -622,6 +622,7 @@ def init_db():
         # Seed default job roles if empty
         cursor.execute("SELECT COUNT(*) FROM job_roles")
         if cursor.fetchone()[0] == 0:
+            for title, desc, category in DEFAULT_ROLES:
                 cursor.execute(
                     "INSERT INTO job_roles (title, description, category) VALUES (?, ?, ?)",
                     (title, desc, category)
