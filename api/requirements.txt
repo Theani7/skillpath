@@ -13,7 +13,7 @@ defusedxml>=0.7.1
 email-validator>=2.2.0
 
 # Local resume parsing (spaCy NER + fuzzy matching + dateutil)
-spacy>=3.7.0
+spacy>=3.7.0,<3.8.0
 rapidfuzz>=3.9.0
 python-dateutil>=2.9.0
 

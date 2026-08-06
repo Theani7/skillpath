@@ -77,8 +77,11 @@ jobs:
           pip install --upgrade pip
           pip install -r api/requirements.txt
 
-      - name: Download spaCy model
-        run: python -m spacy download en_core_web_sm
+      - name: Install spaCy (Python 3.10+)
+        if: matrix.python-version != '3.9'
+        run: |
+          pip install spacy
+          python -m spacy download en_core_web_sm
 
       - name: Lint (ruff)
         run: |
@@ -94,9 +97,7 @@ jobs:
 
       - name: Check migrations are current
         run: |
-          pip install alembic
-          alembic check
-        continue-on-error: true
+          alembic check || true
 
       - name: Run tests with coverage
         run: |
