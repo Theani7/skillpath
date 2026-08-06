@@ -29,7 +29,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
   const [loginStep, setLoginStep] = useState<'login' | 'forgot' | 'forgot-otp'>('login');
   const [unverifiedAccount, setUnverifiedAccount] = useState(false);
   const [resendVerifMsg, setResendVerifMsg] = useState('');
-  const [resendVerifOtp, setResendVerifOtp] = useState('');
+
   const [resendVerifLoading, setResendVerifLoading] = useState(false);
 
   const [firstName, setFirstName] = useState('');
@@ -43,7 +43,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
   const [regLoading, setRegLoading] = useState(false);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
   const [regStep, setRegStep] = useState<'form' | 'otp'>('form');
-  const [devOtp, setDevOtp] = useState('');
+
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [verifyError, setVerifyError] = useState('');
   const [verifyLoading, setVerifyLoading] = useState(false);
@@ -56,7 +56,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   const [forgotShowPasswords, setForgotShowPasswords] = useState(false);
-  const [forgotDevOtp, setForgotDevOtp] = useState('');
+
   const [forgotSuccess, setForgotSuccess] = useState(false);
   const [forgotResendCountdown, startForgotResendCountdown] = useCountdown(30);
 
@@ -76,19 +76,17 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
       setUsernameStatus('idle');
       setRegistrationSuccess(false);
       setRegStep('form');
-      setDevOtp('');
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setVerifyError('');
       setLoginStep('login');
       setUnverifiedAccount(false);
       setResendVerifMsg('');
-      setResendVerifOtp('');
+
       setForgotEmail('');
       setForgotError('');
       setForgotOtp(Array(OTP_LENGTH).fill(''));
       setForgotNewPassword('');
       setForgotConfirmPassword('');
-      setForgotDevOtp('');
       setForgotSuccess(false);
     }
   }, [isOpen, initialTab]);
@@ -135,7 +133,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
     setLoginError('');
     setUnverifiedAccount(false);
     setResendVerifMsg('');
-    setResendVerifOtp('');
     setLoginLoading(true);
 
     const formData = new URLSearchParams();
@@ -179,7 +176,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
       const data = await res.json();
       if (res.ok) {
         setResendVerifMsg(data.message || 'A new code has been sent.');
-        if (data.debug_otp) setResendVerifOtp(data.debug_otp);
         setLoginError('');
       } else {
         setLoginError(data.error || data.detail?.[0]?.msg || data.detail || 'Unable to resend the code. Try again shortly.');
@@ -215,7 +211,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
       });
       const data = await res.json();
       if (res.ok) {
-        setDevOtp(data.debug_otp || '');
         setOtpDigits(Array(OTP_LENGTH).fill(''));
         setVerifyError('');
         setRegStep('otp');
@@ -281,7 +276,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
       });
       const data = await res.json();
       if (res.ok) {
-        if (data.debug_otp) setDevOtp(data.debug_otp);
         setOtpDigits(Array(OTP_LENGTH).fill(''));
         startResendCountdown();
       } else {
@@ -305,7 +299,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
       });
       const data = await res.json();
       if (res.ok) {
-        setForgotDevOtp(data.debug_otp || '');
         setForgotOtp(Array(OTP_LENGTH).fill(''));
         setLoginStep('forgot-otp');
         startForgotResendCountdown();
@@ -382,7 +375,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
       });
       const data = await res.json();
       if (res.ok) {
-        if (data.debug_otp) setForgotDevOtp(data.debug_otp);
         setForgotOtp(Array(OTP_LENGTH).fill(''));
         startForgotResendCountdown();
       } else {
@@ -467,7 +459,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
                 loginError={loginError} loginLoading={loginLoading}
                 registrationSuccess={registrationSuccess} forgotSuccess={forgotSuccess}
                 unverifiedAccount={unverifiedAccount}
-                resendVerifMsg={resendVerifMsg} resendVerifOtp={resendVerifOtp}
+                resendVerifMsg={resendVerifMsg}
                 resendVerifLoading={resendVerifLoading}
                 handleLoginSubmit={handleLoginSubmit}
                 handleResendVerification={handleResendVerification}
@@ -478,7 +470,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
                 forgotNewPassword={forgotNewPassword} setForgotNewPassword={setForgotNewPassword}
                 forgotConfirmPassword={forgotConfirmPassword} setForgotConfirmPassword={setForgotConfirmPassword}
                 forgotShowPasswords={forgotShowPasswords} setForgotShowPasswords={setForgotShowPasswords}
-                forgotDevOtp={forgotDevOtp} forgotResendCountdown={forgotResendCountdown}
+                forgotResendCountdown={forgotResendCountdown}
                 forgotStrength={forgotStrength} forgotStrengthsMatch={forgotStrengthsMatch}
                 handleForgotRequest={handleForgotRequest} handleForgotReset={handleForgotReset}
                 handleResendForgot={handleResendForgot}
@@ -497,7 +489,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
                 regError={regError} regLoading={regLoading}
                 strength={strength} passwordsMatch={passwordsMatch}
                 passwordsMismatch={passwordsMismatch} canRegister={canRegister}
-                devOtp={devOtp} otpDigits={otpDigits} setOtpDigits={setOtpDigits}
+                otpDigits={otpDigits} setOtpDigits={setOtpDigits}
                 verifyError={verifyError} verifyLoading={verifyLoading}
                 resendCountdown={resendCountdown}
                 handleRegisterSubmit={handleRegisterSubmit}

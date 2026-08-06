@@ -103,24 +103,22 @@ def _hash_code(code: str) -> str:
 
 
 def _send_otp(email: str, otp: str, purpose: str) -> dict:
-    """Send an OTP email. Returns {'otp_sent': bool, 'debug_otp': str|None}.
+    """Send an OTP email. Returns {'otp_sent': bool}.
 
-    In development with SMTP unconfigured the OTP is returned to the caller so
-    the flow stays testable. In production a failed delivery surfaces as 503.
+    If SMTP is not configured or delivery fails, returns {'otp_sent': False}.
+    Callers surface this as HTTP 503.
     """
     if email_configured():
         sent = send_otp_email(email, otp, purpose)
         if sent:
-            return {"otp_sent": True, "debug_otp": None}
+            return {"otp_sent": True}
         logger.error("Failed to send %s OTP email to %s", purpose, email)
-        return {"otp_sent": False, "debug_otp": None}
-    if not IS_PROD:
+    else:
         logger.warning(
-            "SMTP not configured – returning %s OTP for %s in response (dev only).",
+            "SMTP not configured – %s OTP for %s could not be sent.",
             purpose, email,
         )
-        return {"otp_sent": False, "debug_otp": otp}
-    return {"otp_sent": False, "debug_otp": None}
+    return {"otp_sent": False}
 
 
 def _store_otp(cursor, conn, email: str, purpose: str, otp: str) -> None:
@@ -231,7 +229,7 @@ def resend_verification(payload: ResendVerificationRequest, request: Request):
 
     otp = _generate_otp()
     delivery = _send_otp(email, otp, "register")
-    if not delivery["otp_sent"] and not delivery["debug_otp"]:
+    if not delivery["otp_sent"]:
         raise HTTPException(
             status_code=503,
             detail="Unable to send the verification email. Please try again later.",
@@ -241,10 +239,7 @@ def resend_verification(payload: ResendVerificationRequest, request: Request):
         _store_otp(conn.cursor(), conn, email, "register", otp)
     finally:
         conn.close()
-    response = {"status": "success", "message": "If your account needs verification, a new code has been sent."}
-    if delivery["debug_otp"]:
-        response["debug_otp"] = delivery["debug_otp"]
-    return response
+    return {"status": "success", "message": "If your account needs verification, a new code has been sent."}
 
 
 @router.get("/check-username/{username}")
@@ -281,7 +276,7 @@ def register_user(user: UserRegister, request: Request):
         # so a broken email service never leaves orphan accounts behind.
         otp = _generate_otp()
         delivery = _send_otp(user.email, otp, "register")
-        if not delivery["otp_sent"] and not delivery["debug_otp"]:
+        if not delivery["otp_sent"]:
             raise HTTPException(
                 status_code=503,
                 detail="Unable to send the verification email. Please try again later.",
@@ -297,7 +292,6 @@ def register_user(user: UserRegister, request: Request):
         return {
             "message": "Registration successful. Check your email for the verification code.",
             "otp_sent": delivery["otp_sent"],
-            "debug_otp": delivery["debug_otp"],
         }
     except HTTPException:
         raise
@@ -362,7 +356,7 @@ def resend_otp(payload: ResendOTPRequest, request: Request):
 
     otp = _generate_otp()
     delivery = _send_otp(payload.email, otp, payload.purpose)
-    if not delivery["otp_sent"] and not delivery["debug_otp"]:
+    if not delivery["otp_sent"]:
         raise HTTPException(
             status_code=503,
             detail="Unable to send the verification email. Please try again later.",
@@ -377,7 +371,6 @@ def resend_otp(payload: ResendOTPRequest, request: Request):
     return {
         "message": "A new verification code has been sent.",
         "otp_sent": delivery["otp_sent"],
-        "debug_otp": delivery["debug_otp"],
     }
 
 
@@ -648,19 +641,15 @@ def request_password_reset(payload: PasswordResetRequest, request: Request):
                     return {"status": "success", "message": "If the email exists, a reset code has been sent."}
             otp = _generate_otp()
             delivery = _send_otp(payload.email, otp, "password_reset")
-            if not delivery["otp_sent"] and not delivery["debug_otp"]:
+            if not delivery["otp_sent"]:
                 raise HTTPException(
                     status_code=503,
                     detail="Unable to send the reset email. Please try again later.",
                 )
-            debug_otp = delivery["debug_otp"]
             _store_otp(cursor, conn, payload.email, "password_reset", otp)
     finally:
         conn.close()
-    response = {"status": "success", "message": "If the email exists, a reset code has been sent."}
-    if debug_otp:
-        response["debug_otp"] = debug_otp
-    return response
+    return {"status": "success", "message": "If the email exists, a reset code has been sent."}
 
 
 class VerifyResetOTPRequest(BaseModel):

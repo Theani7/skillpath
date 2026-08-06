@@ -1,5 +1,4 @@
 import { useRef } from 'react';
-import { ShieldCheck } from 'lucide-react';
 import { OTP_LENGTH } from './otpUtils';
 
 type OtpBoxesProps = {
@@ -55,19 +54,4 @@ export const OtpBoxes = ({ value, onChange, disabled }: OtpBoxesProps) => {
   );
 };
 
-type DevOtpHintProps = {
-  otp: string;
-  label: string;
-};
 
-export const DevOtpHint = ({ otp, label }: DevOtpHintProps) => {
-  if (!otp) return null;
-  return (
-    <div className="auth-modal-dev-hint" role="alert">
-      <ShieldCheck size={14} />
-      <span>
-        {label}: <strong>{otp}</strong> <em>(dev only – SMTP not configured)</em>
-      </span>
-    </div>
-  );
-};

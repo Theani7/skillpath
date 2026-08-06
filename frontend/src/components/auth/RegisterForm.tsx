@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Check, CheckCircle, Eye, EyeOff, Lock, Mail, ShieldCheck, User, UserPlus, X } from 'lucide-react';
-import { OtpBoxes, DevOtpHint } from './otp';
+import { OtpBoxes } from './otp';
 import { OTP_LENGTH, strengthLabel, strengthColor } from './otpUtils';
 
 type Props = {
@@ -26,7 +26,6 @@ type Props = {
   passwordsMatch: boolean;
   passwordsMismatch: boolean;
   canRegister: boolean;
-  devOtp: string;
   otpDigits: string[];
   setOtpDigits: (v: string[]) => void;
   verifyError: string;
@@ -50,7 +49,7 @@ const RegisterForm = ({
   showPasswords, setShowPasswords,
   regError, regLoading,
   strength, passwordsMatch, passwordsMismatch, canRegister,
-  devOtp, otpDigits, setOtpDigits,
+  otpDigits, setOtpDigits,
   verifyError, verifyLoading, resendCountdown,
   handleRegisterSubmit, handleVerifyEmail, handleResendRegister, handleTabSwitch,
 }: Props) => (
@@ -295,7 +294,6 @@ const RegisterForm = ({
           <span>{verifyError}</span>
         </div>
       )}
-      <DevOtpHint otp={devOtp} label="Dev verification code" />
       <div className="auth-verify-hero">
         <div className="auth-verify-icon">
           <ShieldCheck size={26} />

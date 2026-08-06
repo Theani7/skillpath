@@ -14,5 +14,7 @@
     "build": "cd frontend && bun run build",
     "lint": "cd frontend && bun run lint"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
 }

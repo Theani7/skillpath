@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Check, CheckCircle, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, User } from 'lucide-react';
-import { OtpBoxes, DevOtpHint } from './otp';
+import { OtpBoxes } from './otp';
 import { OTP_LENGTH, strengthLabel, strengthColor } from './otpUtils';
 
 type LoginStep = 'login' | 'forgot' | 'forgot-otp';
@@ -19,7 +19,6 @@ type Props = {
   forgotSuccess: boolean;
   unverifiedAccount: boolean;
   resendVerifMsg: string;
-  resendVerifOtp: string;
   resendVerifLoading: boolean;
   handleLoginSubmit: (e: React.FormEvent) => void;
   handleResendVerification: () => void;
@@ -36,7 +35,6 @@ type Props = {
   setForgotConfirmPassword: (v: string) => void;
   forgotShowPasswords: boolean;
   setForgotShowPasswords: React.Dispatch<React.SetStateAction<boolean>>;
-  forgotDevOtp: string;
   forgotResendCountdown: number;
   forgotStrength: number;
   forgotStrengthsMatch: boolean;
@@ -53,7 +51,7 @@ const LoginForm = ({
   loginError, loginLoading,
   registrationSuccess, forgotSuccess,
   unverifiedAccount,
-  resendVerifMsg, resendVerifOtp, resendVerifLoading,
+  resendVerifMsg, resendVerifLoading,
   handleLoginSubmit, handleResendVerification, handleTabSwitch,
   forgotEmail, setForgotEmail,
   forgotError, forgotLoading,
@@ -61,7 +59,7 @@ const LoginForm = ({
   forgotNewPassword, setForgotNewPassword,
   forgotConfirmPassword, setForgotConfirmPassword,
   forgotShowPasswords, setForgotShowPasswords,
-  forgotDevOtp, forgotResendCountdown,
+  forgotResendCountdown,
   forgotStrength, forgotStrengthsMatch,
   handleForgotRequest, handleForgotReset, handleResendForgot,
 }: Props) => (
@@ -91,7 +89,6 @@ const LoginForm = ({
           <span>{resendVerifMsg}</span>
         </div>
       )}
-      <DevOtpHint otp={resendVerifOtp} label="Dev verification code" />
       {unverifiedAccount && (
         <div className="auth-resend-verification">
           <button
@@ -243,7 +240,6 @@ const LoginForm = ({
           <span>{forgotError}</span>
         </div>
       )}
-      <DevOtpHint otp={forgotDevOtp} label="Dev reset code" />
       <p className="auth-modal-subtitle">
         We sent a 6-digit code to <strong>{forgotEmail}</strong>. Enter it and choose a new password.
       </p>

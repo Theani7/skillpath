@@ -26,13 +26,14 @@ def _verify_email(email, otp):
 
 
 def _register_and_verify(username="testuser", email="test@example.com", password="Test1234!"):
-    """Register and verify email using the dev debug OTP. Returns the register response."""
+    """Register and verify email using the captured OTP. Returns the register response."""
+    from api.tests.conftest import get_captured_otp
     resp = _register_user(username, email, password)
     if resp.status_code != 200:
         return resp
-    debug_otp = resp.json().get("debug_otp")
-    if debug_otp:
-        _verify_email(email, debug_otp)
+    otp = get_captured_otp(email, "register")
+    if otp:
+        _verify_email(email, otp)
     return resp
 
 
@@ -108,12 +109,15 @@ class AuthFlowTests(unittest.TestCase):
         return _register_and_verify(username, email)
 
     def test_register_success(self):
-        resp = self._reg()
+        from api.tests.conftest import get_captured_otp
+        em = f"reg_{self.uid}@test.com"
+        resp = self._reg(email=em)
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertIn("verification code", data["message"].lower())
-        self.assertFalse(data["otp_sent"])
-        self.assertIsInstance(data["debug_otp"], str)
+        self.assertTrue(data["otp_sent"])
+        self.assertIsNotNone(get_captured_otp(em, "register"))
+        self.assertNotIn("debug_otp", data)
 
     def test_register_duplicate_username(self):
         uname = f"dup_{self.uid}"
@@ -129,11 +133,13 @@ class AuthFlowTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_verify_email_success(self):
+        from api.tests.conftest import get_captured_otp
         uname = f"ve_{self.uid}"
         em = f"ve_{self.uid}@test.com"
         self.users.append(uname)
-        resp = _register_user(uname, em)
-        otp = resp.json()["debug_otp"]
+        _register_user(uname, em)
+        otp = get_captured_otp(em, "register")
+        self.assertIsNotNone(otp)
         ver = _verify_email(em, otp)
         self.assertEqual(ver.status_code, 200)
         self.assertIn("verified", ver.json()["message"].lower())
@@ -152,17 +158,19 @@ class AuthFlowTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_login_blocked_until_email_verified(self):
+        from api.tests.conftest import get_captured_otp
         uname = f"lb_{self.uid}"
         em = f"lb_{self.uid}@test.com"
         self.users.append(uname)
-        reg = _register_user(uname, em)
+        _register_user(uname, em)
         resp = _login_user(uname)
         self.assertEqual(resp.status_code, 403)
-        _verify_email(em, reg.json()["debug_otp"])
+        _verify_email(em, get_captured_otp(em, "register"))
         resp = _login_user(uname)
         self.assertEqual(resp.status_code, 200)
 
     def test_resend_otp(self):
+        from api.tests.conftest import get_captured_otp
         em = f"rs_{self.uid}@test.com"
         self._reg(email=em)
         # Cooldown since the registration OTP was just sent
@@ -182,12 +190,15 @@ class AuthFlowTests(unittest.TestCase):
             conn.close()
         resp = client.post("/api/auth/resend-otp", json={"email": em, "purpose": "register"})
         self.assertEqual(resp.status_code, 200)
-        self.assertIn("debug_otp", resp.json())
+        self.assertTrue(resp.json()["otp_sent"])
+        self.assertIsNotNone(get_captured_otp(em, "register"))
+        self.assertNotIn("debug_otp", resp.json())
         # And again immediately after -> cooldown re-applied
         resp = client.post("/api/auth/resend-otp", json={"email": em, "purpose": "register"})
         self.assertEqual(resp.status_code, 429)
 
     def test_resend_verification_from_login(self):
+        from api.tests.conftest import get_captured_otp
         uname = f"rv_{self.uid}"
         em = f"rv_{self.uid}@test.com"
         self.users.append(uname)
@@ -205,9 +216,9 @@ class AuthFlowTests(unittest.TestCase):
             conn.close()
         resp = client.post("/api/auth/resend-verification", json={"username": uname})
         self.assertEqual(resp.status_code, 200)
-        resend_otp = resp.json().get("debug_otp")
-        self.assertIsInstance(resend_otp, str)
-        # Verified accounts get a generic response with no code
+        resend_otp = get_captured_otp(em, "register")
+        self.assertIsNotNone(resend_otp)
+        # Verified accounts get a generic response
         _verify_email(em, resend_otp)
         conn = get_db_connection()
         try:
@@ -268,6 +279,7 @@ class AuthFlowTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
 
     def test_password_reset_otp_flow(self):
+        from api.tests.conftest import get_captured_otp
         uname = f"pr_{self.uid}"
         em = f"pr_{self.uid}@test.com"
         self.users.append(uname)
@@ -275,8 +287,8 @@ class AuthFlowTests(unittest.TestCase):
 
         req = client.post("/api/auth/request-password-reset", json={"email": em})
         self.assertEqual(req.status_code, 200)
-        debug_otp = req.json().get("debug_otp")
-        self.assertIsInstance(debug_otp, str)
+        debug_otp = get_captured_otp(em, "password_reset")
+        self.assertIsNotNone(debug_otp)
 
         ver = client.post("/api/auth/verify-reset-otp", json={"email": em, "otp": debug_otp})
         self.assertEqual(ver.status_code, 200)
@@ -297,6 +309,7 @@ class AuthFlowTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertNotIn("debug_otp", resp.json())
+        self.assertNotIn("otp_sent", resp.json())
         resp = client.get("/api/auth/me")
         self.assertEqual(resp.status_code, 401)
 

@@ -136,7 +136,6 @@ export interface MeResponse {
 export interface RegisterResponse {
   message: string;
   otp_sent: boolean;
-  debug_otp: string | null;
 }
 
 export interface LatestAnalysisResponse {
