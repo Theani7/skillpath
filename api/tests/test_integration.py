@@ -236,8 +236,9 @@ class AuthFlowTests(unittest.TestCase):
 
     def test_login_success(self):
         uname = f"login_{self.uid}"
+        em = f"l_{self.uid}@test.com"
         self.users.append(uname)
-        _register_and_verify(uname, f"l_{self.uid}@test.com")
+        _register_and_verify(uname, em)
         resp = _login_user(uname)
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -245,6 +246,15 @@ class AuthFlowTests(unittest.TestCase):
         self.assertIn("username", data)
         self.assertNotIn("access_token", data)
         self.assertNotIn("refresh_token", data)
+
+    def test_login_with_email(self):
+        uname = f"emailogin_{self.uid}"
+        em = f"el_{self.uid}@test.com"
+        self.users.append(uname)
+        _register_and_verify(uname, em)
+        resp = _login_user(em)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["username"], uname)
 
     def test_login_wrong_password(self):
         uname = f"wpw_{self.uid}"

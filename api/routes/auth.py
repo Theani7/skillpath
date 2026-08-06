@@ -387,8 +387,17 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
     try:
         cursor = conn.cursor()
 
-        # Check for existing lockout
-        cursor.execute("SELECT * FROM login_attempts WHERE username = ?", (username,))
+        # Accept both username and email for login
+        is_email = "@" in username
+        if is_email:
+            cursor.execute("SELECT * FROM users WHERE email = ?", (username,))
+        else:
+            cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        user = cursor.fetchone()
+
+        # Check for existing lockout (by username, since that's what we track)
+        login_key = user["username"] if user else username
+        cursor.execute("SELECT * FROM login_attempts WHERE username = ?", (login_key,))
         attempt_row = cursor.fetchone()
 
         if attempt_row:
@@ -400,9 +409,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
                     detail=f"Too many failed attempts. Try again in {remaining} seconds."
                 )
 
-        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-        user = cursor.fetchone()
-
         if not user or not verify_password(form_data.password, user["hashed_password"]):
             # Increment failed attempts
             if attempt_row:
@@ -410,12 +416,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
                 locked_until = now + (LOGIN_LOCKOUT_MINUTES * 60) if attempts >= MAX_LOGIN_ATTEMPTS else 0
                 cursor.execute(
                     "UPDATE login_attempts SET attempts = ?, locked_until = ? WHERE username = ?",
-                    (attempts, locked_until, username)
+                    (attempts, locked_until, login_key)
                 )
             else:
                 cursor.execute(
                     "INSERT INTO login_attempts (username, attempts, first_attempt, locked_until) VALUES (?, ?, ?, ?)",
-                    (username, 1, now, 0)
+                    (login_key, 1, now, 0)
                 )
             conn.commit()
             conn.close()
