@@ -2,7 +2,7 @@
 
 import re
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import spacy
 from dateutil import parser as date_parser
@@ -12,6 +12,133 @@ from rapidfuzz import fuzz, process
 from api.seed_data import get_all_skills
 
 logger = logging.getLogger("resume-analyzer")
+
+# Skill inference graph: if key is found, infer values as implicit skills
+# This gives the parser basic semantic understanding of technology relationships
+SKILL_INFERENCE_GRAPH: Dict[str, List[str]] = {
+    # Frontend frameworks → core web technologies
+    "react": ["javascript", "html", "css", "jsx", "typescript"],
+    "reactjs": ["javascript", "html", "css", "jsx", "typescript"],
+    "react native": ["javascript", "typescript", "mobile development"],
+    "angular": ["javascript", "typescript", "html", "css"],
+    "angularjs": ["javascript", "html", "css"],
+    "vue": ["javascript", "html", "css", "typescript"],
+    "vuejs": ["javascript", "html", "css", "typescript"],
+    "svelte": ["javascript", "html", "css"],
+    "next.js": ["javascript", "react", "html", "css", "typescript"],
+    "nextjs": ["javascript", "react", "html", "css", "typescript"],
+    "gatsby": ["javascript", "react", "html", "css"],
+    "nuxt": ["javascript", "vue", "html", "css"],
+
+    # Backend frameworks → languages & concepts
+    "flask": ["python", "rest api", "web development"],
+    "django": ["python", "rest api", "web development", "mvc"],
+    "fastapi": ["python", "rest api", "web development"],
+    "express": ["javascript", "node.js", "rest api", "web development"],
+    "expressjs": ["javascript", "node.js", "rest api", "web development"],
+    "spring": ["java", "rest api", "web development", "mvc"],
+    "spring boot": ["java", "rest api", "web development", "microservices"],
+    "rails": ["ruby", "web development", "mvc", "rest api"],
+    "ruby on rails": ["ruby", "web development", "mvc", "rest api"],
+    "asp.net": ["c#", "web development", "mvc", "rest api"],
+    "laravel": ["php", "web development", "mvc", "rest api"],
+    "symfony": ["php", "web development", "mvc"],
+
+    # Languages → typical ecosystems
+    "javascript": ["web development", "dom manipulation"],
+    "typescript": ["javascript", "web development", "type systems"],
+    "python": ["scripting", "automation", "data analysis"],
+    "java": ["object-oriented programming", "jvm"],
+    "golang": ["concurrency", "systems programming"],
+    "rust": ["systems programming", "memory safety"],
+    "c++": ["systems programming", "object-oriented programming"],
+    "c#": [".net", "object-oriented programming"],
+    "php": ["web development", "server-side programming"],
+    "ruby": ["web development", "scripting"],
+    "swift": ["ios development", "mobile development"],
+    "kotlin": ["android development", "mobile development", "jvm"],
+    "scala": ["jvm", "functional programming", "big data"],
+    "r": ["statistics", "data analysis", "data visualization"],
+
+    # Databases → related concepts
+    "postgresql": ["sql", "database administration", "data modeling"],
+    "mysql": ["sql", "database administration", "data modeling"],
+    "mongodb": ["nosql", "database administration", "data modeling"],
+    "redis": ["caching", "nosql", "database administration"],
+    "elasticsearch": ["search", "nosql", "data analysis"],
+    "cassandra": ["nosql", "distributed systems", "database administration"],
+    "dynamodb": ["nosql", "aws", "database administration"],
+    "firebase": ["nosql", "google cloud", "real-time databases"],
+
+    # Cloud platforms → ecosystem services
+    "aws": ["cloud computing", "devops", "infrastructure"],
+    "amazon web services": ["cloud computing", "devops", "infrastructure"],
+    "gcp": ["cloud computing", "devops", "infrastructure"],
+    "google cloud": ["cloud computing", "devops", "infrastructure"],
+    "azure": ["cloud computing", "devops", "infrastructure"],
+    "heroku": ["cloud computing", "paas", "devops"],
+    "digitalocean": ["cloud computing", "infrastructure", "devops"],
+
+    # DevOps tools → practices
+    "docker": ["containerization", "devops", "infrastructure"],
+    "kubernetes": ["containerization", "devops", "infrastructure", "orchestration"],
+    "k8s": ["containerization", "devops", "infrastructure", "orchestration"],
+    "terraform": ["infrastructure as code", "devops", "cloud computing"],
+    "ansible": ["configuration management", "devops", "infrastructure as code"],
+    "jenkins": ["ci/cd", "devops", "automation"],
+    "github actions": ["ci/cd", "devops", "automation"],
+    "gitlab ci": ["ci/cd", "devops", "automation"],
+    "circleci": ["ci/cd", "devops", "automation"],
+    "prometheus": ["monitoring", "observability", "devops"],
+    "grafana": ["monitoring", "observability", "data visualization"],
+    "elk stack": ["logging", "monitoring", "data analysis"],
+    "datadog": ["monitoring", "observability", "devops"],
+
+    # ML/Data tools → domain knowledge
+    "tensorflow": ["python", "machine learning", "deep learning", "neural networks"],
+    "pytorch": ["python", "machine learning", "deep learning", "neural networks"],
+    "keras": ["python", "machine learning", "deep learning"],
+    "scikit-learn": ["python", "machine learning", "data analysis"],
+    "pandas": ["python", "data analysis", "data manipulation"],
+    "numpy": ["python", "data analysis", "scientific computing"],
+    "spark": ["big data", "data engineering", "distributed computing"],
+    "apache spark": ["big data", "data engineering", "distributed computing"],
+    "hadoop": ["big data", "data engineering", "distributed computing"],
+    "airflow": ["data engineering", "etl", "workflow orchestration"],
+    "dbt": ["data engineering", "etl", "data transformation"],
+    "snowflake": ["data warehousing", "sql", "data engineering"],
+    "databricks": ["big data", "data engineering", "spark"],
+    "tableau": ["data visualization", "business intelligence", "data analysis"],
+    "power bi": ["data visualization", "business intelligence", "data analysis"],
+    "looker": ["data visualization", "business intelligence", "data analysis"],
+
+    # Mobile development
+    "flutter": ["dart", "mobile development", "cross-platform"],
+    "react native": ["javascript", "mobile development", "cross-platform"],
+    "xamarin": ["c#", "mobile development", "cross-platform"],
+    "ionic": ["javascript", "mobile development", "cross-platform"],
+
+    # Testing frameworks → practices
+    "jest": ["javascript", "testing", "unit testing"],
+    "pytest": ["python", "testing", "unit testing"],
+    "selenium": ["testing", "automation", "web testing"],
+    "cypress": ["javascript", "testing", "end-to-end testing"],
+    "junit": ["java", "testing", "unit testing"],
+
+    # Version control & collaboration
+    "git": ["version control", "collaboration"],
+    "github": ["version control", "collaboration", "git"],
+    "gitlab": ["version control", "collaboration", "git"],
+    "bitbucket": ["version control", "collaboration", "git"],
+
+    # APIs & protocols
+    "graphql": ["api development", "rest api"],
+    "rest api": ["api development", "web development"],
+    "restful": ["api development", "web development"],
+    "grpc": ["api development", "microservices"],
+    "websocket": ["real-time communication", "web development"],
+    "microservices": ["distributed systems", "api development", "architecture"],
+}
 
 _nlp = None
 
@@ -64,6 +191,33 @@ _NOISE_SKILLS = {
     # Media formats
     "png", "jpg", "svg", "mp3", "mp4",
 }
+
+
+def infer_implicit_skills(found_skills: List[str]) -> List[str]:
+    """Expand found skills with implicit skills from the inference graph.
+
+    Example: if "react" is found, infer ["javascript", "html", "css", "jsx"]
+    """
+    inferred = []
+    seen = {s.lower() for s in found_skills}
+
+    for skill in found_skills:
+        skill_lower = skill.lower()
+        # Look up direct matches in the graph
+        if skill_lower in SKILL_INFERENCE_GRAPH:
+            for implicit_skill in SKILL_INFERENCE_GRAPH[skill_lower]:
+                if implicit_skill.lower() not in seen:
+                    seen.add(implicit_skill.lower())
+                    inferred.append(implicit_skill.title())
+        # Also check for partial matches (e.g., "react native" matches "react")
+        for key, values in SKILL_INFERENCE_GRAPH.items():
+            if key in skill_lower and key != skill_lower:
+                for implicit_skill in values:
+                    if implicit_skill.lower() not in seen:
+                        seen.add(implicit_skill.lower())
+                        inferred.append(implicit_skill.title())
+
+    return inferred
 
 
 def extract_skills_fuzzy(

@@ -19,6 +19,7 @@ from api.parser_enhancements import (
     extract_skills_fuzzy,
     parse_date_range,
     extract_companies_spacy,
+    infer_implicit_skills,
 )
 
 logger = logging.getLogger("resume-analyzer")
@@ -339,6 +340,10 @@ def parse_resume_fallback(
 
     # 3. Skill extraction (rapidfuzzy matching against taxonomy)
     found_skills = extract_skills_fuzzy(text)
+
+    # 3b. Semantic inference: expand found skills with related technologies
+    implicit_skills = infer_implicit_skills(found_skills)
+    found_skills = found_skills + implicit_skills
 
     # 4. Name detection (spaCy NER + regex fallback)
     name = _detect_name(text, lines)

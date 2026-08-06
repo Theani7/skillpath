@@ -314,6 +314,31 @@ Python, Java
         self.assertTrue(len(out["education_blocks"]) >= 1)
         self.assertIn("Python", out["skills"])
 
+    def test_skill_inference_graph(self):
+        """Skills should be expanded with implicit skills from the inference graph."""
+        text = """
+John Smith
+john@example.com
+
+Experience
+Frontend Developer
+Acme Corp
+Jan 2020 - Present
+- Built web apps with React
+
+Skills
+React, Docker
+"""
+        out = parse_resume_fallback(text, target_role="Frontend Developer")
+        skills_lower = [s.lower() for s in out["skills"]]
+        # React should infer javascript, html, css
+        self.assertIn("javascript", skills_lower)
+        self.assertIn("html", skills_lower)
+        self.assertIn("css", skills_lower)
+        # Docker should infer containerization, devops
+        self.assertIn("containerization", skills_lower)
+        self.assertIn("devops", skills_lower)
+
 
 if __name__ == "__main__":
     unittest.main()
