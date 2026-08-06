@@ -123,7 +123,19 @@ SkillPath uses an **ordered fallback chain** (`AI_PROVIDERS`, default `gemini,op
 |----------|--------|-------|
 | **Google Gemini** | `GEMINI_API_KEY` | Primary: analysis, roadmap generation, interview questions |
 | **OpenAI-compatible** | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` | Works with OpenAI, Groq, Together, OpenRouter, or local Ollama |
-| **Local fallback** | none | Deterministic regex parser (no LLM required) |
+| **Local fallback** | none | Enhanced regex + spaCy NER parser (no LLM required) |
+
+### Local Parser Enhancements
+
+The local parser (`api/resume_parser.py`) uses three libraries for improved accuracy without an LLM:
+
+| Library | Purpose |
+|---------|---------|
+| **spaCy** (`en_core_web_sm`) | Named entity recognition for person names (PERSON) and companies (ORG) |
+| **rapidfuzz** | Fuzzy skill matching — catches variants like "JS" → "JavaScript", "k8s" → "Kubernetes" |
+| **python-dateutil** | Flexible date parsing — handles "Jan 2020", "01/2020", "since 2019", etc. |
+
+spaCy and rapidfuzz are optional dependencies — the parser falls back to regex-only if they are not installed.
 
 Example — Groq as the AI provider:
 ```env
@@ -589,7 +601,7 @@ Found a security issue? **Do not open a public issue.** Email the maintainers or
 | Alembic migrations | Schema versioned in SQLAlchemy, auto-applied on boot |
 | httpOnly cookies over localStorage JWT | Prevents XSS token theft |
 | SHA-256 hashed refresh tokens | Database stores hashes, not raw tokens |
-| Two-tier parsing (AI + regex fallback) | Works offline when no AI key is configured |
+| Two-tier parsing (AI + enhanced regex fallback) | spaCy NER + rapidfuzz + dateutil for offline parsing |
 | Magic-byte file validation | Prevents malicious file uploads via renamed extensions |
 | In-memory cache for market data | Avoids repeated AI/DB calls |
 | Required vs nice-to-have skill weighting | Required skills weighted 2.4x in match score |

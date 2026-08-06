@@ -1,22 +1,29 @@
-"""Local fallback resume parsing: section detection and structured extraction without LLM calls."""
+"""Local fallback resume parsing: section detection and structured extraction without LLM calls.
+
+Enhanced with spaCy NER, dateutil parsing, and rapidfuzz fuzzy matching.
+"""
 
 import re
 import logging
 from typing import Any, Dict, List, Optional
 
 from api.skill_matching import (
-    fuzzy_skill_match,
     _get_role_skills_from_db,
     _get_required_skills_from_db,
     prioritize_missing_skills,
     _compute_local_match_score,
 )
 from api.roadmap_services import generate_personalized_roadmap
-from api.seed_data import get_all_skills
+from api.parser_enhancements import (
+    detect_name_spacy,
+    extract_skills_fuzzy,
+    parse_date_range,
+    extract_companies_spacy,
+)
 
 logger = logging.getLogger("resume-analyzer")
 from api.resume_patterns import (
-    BULLET_PREFIX_RE, DATE_RANGE_RE, DEGREE_RE, NAME_RE, NOISE_LINE_RE,
+    BULLET_PREFIX_RE, DEGREE_RE, NOISE_LINE_RE,
     PHONE_RE, SECTION_HEADERS, SECTION_RETURN_KEY, TITLE_KEYWORDS,
     _SECTION_ORDER,
 )
@@ -61,7 +68,7 @@ def _looks_like_title(line: str) -> bool:
 def _parse_experience_blocks(lines: List[str]) -> List[Dict[str, Any]]:
     """Group raw experience-section lines into {title, company, start_date, end_date, bullets}.
 
-    Algorithm:
+    Uses dateutil for flexible date parsing. Algorithm:
       1. Find every line that contains a date range - each one marks an entry boundary.
       2. For each entry, scan BACKWARDS from the date line to collect contiguous
          header lines (no bullets, < 100 chars, no blank lines in between).
@@ -74,20 +81,20 @@ def _parse_experience_blocks(lines: List[str]) -> List[Dict[str, Any]]:
          "Senior Engineer at Acme, Jan 2020 - Present"), extract from the line
          itself by stripping the date match.
     """
-    # Step 1: locate every date-line index
-    date_positions: List[tuple] = []  # [(idx, match), ...]
+    # Step 1: locate every date-line index using dateutil
+    date_positions: List[tuple] = []  # [(idx, start, end, stripped), ...]
     for i, raw in enumerate(lines):
         stripped = BULLET_PREFIX_RE.sub("", raw.strip(), count=1).strip()
-        m = DATE_RANGE_RE.search(stripped)
-        if m:
-            date_positions.append((i, m, stripped))
+        start, end = parse_date_range(stripped)
+        if start or end:
+            date_positions.append((i, start, end, stripped))
 
     if not date_positions:
         # No dates found - return empty list (don't synthesize a phantom block)
         return []
 
     blocks: List[Dict[str, Any]] = []
-    for k, (idx, m, stripped) in enumerate(date_positions):
+    for k, (idx, start, end, stripped) in enumerate(date_positions):
         # Step 2: collect header lines by scanning backwards
         header_lines: List[str] = []
         j = idx - 1
@@ -103,7 +110,10 @@ def _parse_experience_blocks(lines: List[str]) -> List[Dict[str, Any]]:
             j -= 1
 
         # If the date line itself has title/company content, extract it
-        same_line_header = stripped.replace(m.group(0), "").strip(" ,-–—")
+        date_text = f"{start} - {end}" if start and end else (start or end)
+        same_line_header = stripped
+        if date_text:
+            same_line_header = stripped.replace(date_text, "").strip(" ,-–—")
         same_line_company = _extract_company_from_line(same_line_header) or ""
         same_line_title = ""
         if same_line_company and same_line_header.endswith(same_line_company):
@@ -141,19 +151,20 @@ def _parse_experience_blocks(lines: List[str]) -> List[Dict[str, Any]]:
                 j += 1
                 continue
             bullet_clean = BULLET_PREFIX_RE.sub("", raw_line, count=1).strip()
-            # Stop if this line is another date (shouldn't happen - next_idx catches it)
-            if DATE_RANGE_RE.search(bullet_clean):
+            # Stop if this line is another date
+            b_start, b_end = parse_date_range(bullet_clean)
+            if b_start or b_end:
+                break
+            # Stop if this line looks like a job title (short, title case, no bullet prefix)
+            if (
+                not BULLET_PREFIX_RE.match(raw_line)
+                and len(raw_line) < 60
+                and raw_line[0].isupper()
+                and _looks_like_title(raw_line)
+            ):
                 break
             bullets.append(bullet_clean)
             j += 1
-
-        # Extract start/end
-        try:
-            start = m.group("start") or ""
-            end = m.group("end") or ""
-        except (IndexError, AttributeError):
-            start = m.group(1) or ""
-            end = ""
 
         blocks.append({
             "title": title.strip(),
@@ -221,22 +232,27 @@ def _parse_education_blocks(lines: List[str]) -> List[Dict[str, Any]]:
         })
     return blocks
 
-def _detect_name(lines: List[str]) -> str:
-    """Find the candidate's name in the first few non-empty lines.
+def _detect_name(text: str, lines: List[str]) -> str:
+    """Find the candidate's name using spaCy NER, falling back to regex."""
+    # Try spaCy first
+    name = detect_name_spacy(text, lines)
+    if name:
+        return name
 
-    Heuristic: 2-4 words, each Title-Case, no digits, no email/url chars,
-    not matching a section header.
-    """
+    # Fallback to regex heuristic
     for line in lines[:5]:
         candidate = line.strip()
         if not candidate or len(candidate) > 60:
             continue
         if NOISE_LINE_RE.search(candidate):
             continue
-        # Must look like a name
-        if not NAME_RE.match(candidate):
+        words = candidate.split()
+        if len(words) < 2 or len(words) > 4:
             continue
-        # Don't match section headers
+        if not all(w[0].isupper() for w in words if w):
+            continue
+        if re.search(r"\d", candidate):
+            continue
         if _detect_section(candidate.lower()):
             continue
         return candidate
@@ -321,19 +337,11 @@ def parse_resume_fallback(
     github_match = re.search(r'github\.com/[\w-]+', text_lower)
     phone = _tighten_phone(text)
 
-    # 3. Skill extraction (taxonomy + fuzzy variants)
-    found_skills: List[str] = []
-    seen_lower: set = set()
-    all_skills = get_all_skills()
-    for skill in all_skills:
-        if fuzzy_skill_match(text_lower, skill):
-            t = skill.title()
-            if t.lower() not in seen_lower:
-                seen_lower.add(t.lower())
-                found_skills.append(t)
+    # 3. Skill extraction (rapidfuzzy matching against taxonomy)
+    found_skills = extract_skills_fuzzy(text)
 
-    # 4. Name detection v2
-    name = _detect_name(lines)
+    # 4. Name detection (spaCy NER + regex fallback)
+    name = _detect_name(text, lines)
 
     # 5. Structured experience & education blocks
     experience_blocks = _parse_experience_blocks(sections["experience"])
@@ -364,9 +372,15 @@ def parse_resume_fallback(
     if not education_flat:
         education_flat = sections["education"][:5]
 
-    # 6. Designation + company_names from experience blocks
+    # 6. Designation + company_names from experience blocks + spaCy ORG
     designations = [b["title"] for b in experience_blocks if b.get("title")]
     company_names = [b["company"] for b in experience_blocks if b.get("company")]
+    # Supplement with spaCy ORG entities if few companies found
+    if len(company_names) < 2:
+        spacy_companies = extract_companies_spacy(text)
+        for c in spacy_companies:
+            if c.lower() not in {x.lower() for x in company_names}:
+                company_names.append(c)
 
     # 7. Missing skills for target role (use admin-defined skills from job_role_skills)
     target_skills = _get_role_skills_from_db(target_role)
