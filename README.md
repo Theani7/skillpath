@@ -37,7 +37,7 @@ This is a community project — contributions are welcome. See [Contributing](#c
 - Required skills weighted 2.4x in match score calculation
 
 ### AI-Powered Career Coaching
-- 4-phase learning roadmap generation (Gemini / OpenAI-compatible / local fallback)
+- 4-phase learning roadmap generation (Gemini / OpenAI-compatible + regex fallback)
 - Interactive roadmap progress tracking with skill-level checkpoints
 - Actionable learning recommendations per skill gap
 - Course suggestions from Coursera and Udemy with platform-branded thumbnails
@@ -108,7 +108,6 @@ Managed with **Bun** (install, dev server, build, lint).
 | PyJWT | 2.10+ | JWT token management |
 | bcrypt | 4.2+ | Password hashing |
 | Google Generative AI | 0.8+ | Gemini API (optional) |
-| llama-cpp-python | 0.3+ | Local LLM runtime (optional, lazy-imported) |
 | PyMuPDF | 1.24+ | PDF parsing |
 | python-docx | 1.1+ | DOCX parsing |
 | defusedxml | 0.7+ | Safe XML parsing |
@@ -124,7 +123,7 @@ SkillPath uses an **ordered fallback chain** (`AI_PROVIDERS`, default `gemini,op
 |----------|--------|-------|
 | **Google Gemini** | `GEMINI_API_KEY` | Primary: analysis, roadmap generation, interview questions |
 | **OpenAI-compatible** | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` | Works with OpenAI, Groq, Together, OpenRouter, or local Ollama |
-| **Local fallback** | none | Qwen2-0.5B GGUF model (via Git LFS) + deterministic parsing |
+| **Local fallback** | none | Deterministic regex parser (no LLM required) |
 
 Example — Groq as the AI provider:
 ```env
@@ -152,7 +151,6 @@ skillpath.ai/
 │   ├── exceptions.py               # Error handling
 │   ├── extractor.py                # Resume text extraction (PDF/DOCX/Gemini)
 │   ├── ai_provider.py              # Gemini + OpenAI-compatible provider chain
-│   ├── local_llm.py                # Local Qwen2 model integration
 │   ├── resume_parser.py            # Local fallback resume parsing
 │   ├── resume_patterns.py          # Regex/keyword patterns for parsing
 │   ├── career_services.py          # Resume scoring, skill analysis
@@ -187,7 +185,6 @@ skillpath.ai/
 │   ├── data/
 │   │   └── mock_questions.json     # Static interview questions
 │   └── llm/
-│       └── qwen2-0_5b-instruct-q4_k_m.gguf  # Local model (379MB)
 │
 ├── frontend/                       # Frontend (React + Vite)
 │   ├── src/
@@ -243,13 +240,12 @@ skillpath.ai/
 
 - **Bun** v1.3+ ([install](https://bun.sh)) — used for all frontend install/dev/build/lint
 - **Python** v3.9+ — `bun run setup` auto-creates a venv at `venvapp/` (Windows needs the `py` launcher from the official Python installer)
-- **Git LFS** — the local LLM model is tracked via Git LFS; run `git lfs install` after cloning
-- **AI API key** (optional — app works without it using local parsing + Qwen2-0.5B fallback)
+- **AI API key** (optional — app works without it using local regex parsing)
 
 ### Quick Start
 
 ```bash
-# Clone the repository (Git LFS fetches the local model automatically)
+# Clone the repository
 git clone https://github.com/Theani7/skillpath.git
 cd skillpath
 git lfs install
@@ -380,7 +376,6 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
 - **Frontend** — installs with `bun install --frozen-lockfile`, then `bun run lint` and `bun run build`.
 - **Backend** — `python -m pytest api/tests` against Python 3.11.
 
-The 379MB local LLM model is fetched via Git LFS during checkout, so CI clones stay fast.
 
 ---
 
@@ -594,14 +589,13 @@ Found a security issue? **Do not open a public issue.** Email the maintainers or
 | Alembic migrations | Schema versioned in SQLAlchemy, auto-applied on boot |
 | httpOnly cookies over localStorage JWT | Prevents XSS token theft |
 | SHA-256 hashed refresh tokens | Database stores hashes, not raw tokens |
-| Two-tier parsing (AI + local fallback) | Works offline, AI for quality |
+| Two-tier parsing (AI + regex fallback) | Works offline when no AI key is configured |
 | Magic-byte file validation | Prevents malicious file uploads via renamed extensions |
 | In-memory cache for market data | Avoids repeated AI/DB calls |
 | Required vs nice-to-have skill weighting | Required skills weighted 2.4x in match score |
 | AI provider fallback chain | `gemini,openai` — one key is enough; local parser as last resort |
 | `run.js` cross-platform helper | Resolves the venv Python binary across macOS/Windows/Linux so `bun run dev:backend` works everywhere |
 | Bun for frontend tooling | `bun install` / `bun run dev` / `bun run build` replace npm for speed and a single lockfile |
-| Git LFS for the local LLM | The 379MB Qwen2 model is stored in Git LFS so it clones on demand without bloating git history |
 
 ---
 
@@ -673,7 +667,7 @@ If this project helped you, consider giving it a ⭐ — it helps others find it
 
 ## Roadmap
 
-- [x] Core resume analysis with AI providers + local fallback
+- [x] Core resume analysis with AI providers + regex fallback
 - [x] Learning roadmaps, skill gap analysis, career coaching
 - [x] Mock interviews (static + AI), JD comparison, team ranking
 - [x] Admin panel with analytics, audit, and data export

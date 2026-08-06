@@ -12,24 +12,15 @@ from api.seed_data import (
 
 logger = logging.getLogger("resume-analyzer")
 
-SKIP_LOCAL_LLM = os.getenv("SKIP_LOCAL_LLM", "false").lower() in ("1", "true", "yes")
 def generate_personalized_roadmap(
     target_role: str, found_skills: List[str], missing_skills: List[str]
 ) -> List[dict]:
-    """Generate a smart, role-specific learning roadmap using local LLM with template fallback."""
+    """Generate a smart, role-specific learning roadmap using template-based generation."""
     role = target_role or "Professional"
     prioritized = prioritize_missing_skills(missing_skills, target_role, found_skills)
 
     if not prioritized:
         return _generate_mastery_roadmap(role, found_skills)
-
-    # Try LLM-powered action items first (unless disabled)
-    llm_actions = {}
-    if not SKIP_LOCAL_LLM:
-        from api.local_llm import generate_roadmap_with_llm
-        llm_actions = generate_roadmap_with_llm(role, found_skills, missing_skills)
-
-    # Fallback to template-based generation
 
     # Get role-specific configuration
     role_config = _get_role_config(role)
@@ -59,14 +50,9 @@ def generate_personalized_roadmap(
         action_items = []
         resources = []
         for skill in group:
-            skill_lower = skill["skill"].lower()
-            # Use LLM actions if available, otherwise fall back to templates
-            if llm_actions and skill_lower in llm_actions:
-                action_items.extend(llm_actions[skill_lower])
-            else:
-                skill_actions, skill_resources = _generate_skill_actions(skill, found_skills, role)
-                action_items.extend(skill_actions)
-                resources.extend(skill_resources)
+            skill_actions, skill_resources = _generate_skill_actions(skill, found_skills, role)
+            action_items.extend(skill_actions)
+            resources.extend(skill_resources)
 
         # Add role-specific project suggestion
         project_suggestion = _get_role_project_suggestion(group_skills, role, role_config)

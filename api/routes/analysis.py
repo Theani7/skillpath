@@ -18,15 +18,9 @@ from api.database import get_db_connection
 from api.exceptions import LLMServiceException, ResumeParseException
 from api.extractor import extract_text_from_docx, extract_text_from_pdf, parse_resume_with_gemini
 from api.resume_parser import parse_resume_fallback
-from api.local_llm import parse_resume_with_local_llm
 from api.market_data import get_market_trends_for_role
 
 logger = logging.getLogger("resume-analyzer")
-
-# Environment variable to disable local LLM for faster development
-SKIP_LOCAL_LLM = os.getenv("SKIP_LOCAL_LLM", "false").lower() in ("1", "true", "yes")
-# Confidence threshold to skip local LLM (default 70, can be set via env)
-LOCAL_LLM_SKIP_THRESHOLD = int(os.getenv("LOCAL_LLM_SKIP_THRESHOLD", "70"))
 
 router = APIRouter(tags=["analysis"])
 
@@ -186,43 +180,11 @@ async def analyze_resume(
                 logger.warning(f"Gemini parse failed: {e}")
                 resume_data = None
         
-        # Step 4: Fall back to local LLM only if Gemini not available and confidence is low
+        # Step 4: Fall back to local regex parser if AI provider returned nothing
         if not resume_data:
-            local_confidence = local_data.get("confidence_score", 0)
-            
-            if local_confidence >= LOCAL_LLM_SKIP_THRESHOLD or SKIP_LOCAL_LLM:
-                if SKIP_LOCAL_LLM:
-                    logger.info("SKIP_LOCAL_LLM enabled, using fast local parser only")
-                else:
-                    logger.info(f"Local parser confidence={local_confidence}% >= {LOCAL_LLM_SKIP_THRESHOLD}%, skipping local LLM")
-                resume_data = local_data
-            else:
-                # Step 5: Local LLM Parsing (Qwen2 - Smart, Free, No API Quota)
-                logger.info(f"Attempting local LLM parse for {file.filename}")
-                try:
-                    llm_data = parse_resume_with_local_llm(resume_text, target_role)
-                    if llm_data and llm_data.get("skills"):
-                        logger.info(
-                            f"Local LLM parse successful: "
-                            f"skills={len(llm_data.get('skills', []))}, "
-                            f"experience={len(llm_data.get('experience_blocks', []))}, "
-                            f"education={len(llm_data.get('education_blocks', []))}"
-                        )
-                        resume_data = llm_data
-                        # Merge local fields if LLM missed them
-                        if not resume_data.get('email') and local_data.get('email'):
-                            resume_data['email'] = local_data['email']
-                        if not resume_data.get('mobile_number') and local_data.get('mobile_number'):
-                            resume_data['mobile_number'] = local_data['mobile_number']
-                        if not resume_data.get('no_of_pages') or resume_data.get('no_of_pages') == 1:
-                            if local_data.get('no_of_pages', 1) > 1:
-                                resume_data['no_of_pages'] = local_data['no_of_pages']
-                    else:
-                        logger.warning("Local LLM returned empty or incomplete data, using regex fallback")
-                        resume_data = local_data
-                except Exception as e:
-                    logger.warning(f"Local LLM parse failed, using regex fallback: {e}")
-                    resume_data = local_data
+            logger.info("AI provider returned no data, using local regex parser")
+            resume_data = local_data
+
         if not resume_data:
             raise LLMServiceException("AI service returned no data and local fallback failed.")
         
