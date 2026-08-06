@@ -103,7 +103,7 @@ const LoginForm = ({
       )}
 
       <div className="auth-field">
-        <label className="auth-field-label" htmlFor="modal-login-username">Username</label>
+        <label className="auth-field-label" htmlFor="modal-login-username">Username or email</label>
         <div className="auth-input-wrap">
           <input
             id="modal-login-username"
@@ -112,7 +112,7 @@ const LoginForm = ({
             onChange={(e) => setLoginUsername(e.target.value)}
             required
             autoComplete="username"
-            placeholder="your-username"
+            placeholder="username or email"
             className="auth-input has-icon"
           />
           <User size={16} style={{
