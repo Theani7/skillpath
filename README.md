@@ -86,6 +86,7 @@ Managed with **Bun** (install, dev server, build, lint).
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | React | 19.x | UI framework |
+| TypeScript | 5.x | Type-safe JavaScript |
 | Vite | 7.x | Build tool and dev server |
 | React Router DOM | 7.x | Client-side routing |
 | Recharts | — | Data visualization (area, bar, pie, radar charts) |
@@ -100,8 +101,10 @@ Managed with **Bun** (install, dev server, build, lint).
 | Python | 3.9+ | Runtime |
 | FastAPI | 0.115+ | Web framework |
 | Uvicorn | — | ASGI server |
-| SQLite | — | Database (WAL mode, 38 tables) |
-| SQLAlchemy | 2.0+ | Database engine |
+| SQLite / PostgreSQL | — | Database (dual support via `DATABASE_URL`) |
+| SQLAlchemy | 2.0+ | ORM + schema definitions |
+| Alembic | 1.13+ | Database migrations |
+| psycopg2-binary | 2.9+ | PostgreSQL adapter (optional) |
 | PyJWT | 2.10+ | JWT token management |
 | bcrypt | 4.2+ | Password hashing |
 | Google Generative AI | 0.8+ | Gemini API (optional) |
@@ -139,7 +142,11 @@ OPENAI_MODEL=llama-3.3-70b-versatile
 skillpath.ai/
 ├── api/                            # Backend (FastAPI)
 │   ├── main.py                     # App entry, middleware, CORS, router registration
-│   ├── database.py                 # Schema, migrations, connections
+│   ├── database.py                 # DB connections, init, migrations entry
+│   ├── models.py                   # SQLAlchemy table definitions (38 tables)
+│   ├── db_compat.py                # SQLite/PostgreSQL compatibility layer
+│   ├── alembic/                    # Database migrations
+│   │   └── versions/               # Migration scripts
 │   ├── auth.py                     # JWT creation/validation, auth dependencies
 │   ├── security.py                 # Password hashing (bcrypt)
 │   ├── exceptions.py               # Error handling
@@ -184,8 +191,10 @@ skillpath.ai/
 │
 ├── frontend/                       # Frontend (React + Vite)
 │   ├── src/
-│   │   ├── App.jsx                 # Routes (lazy-loaded)
-│   │   ├── main.jsx                # Entry point
+│   │   ├── App.tsx                 # Routes (lazy-loaded)
+│   │   ├── main.tsx                # Entry point
+│   │   ├── types/
+│   │   │   └── index.ts            # Shared TypeScript interfaces
 │   │   ├── pages/                  # Landing, Analyzer, AnalysisResult, Admin, ...
 │   │   ├── components/             # Feature-scoped component modules
 │   │   │   ├── analyzer/           # Resume upload + analysis UI
@@ -200,12 +209,13 @@ skillpath.ai/
 │   │   │   ├── settings/           # Account settings
 │   │   │   └── analysis/           # Shared analysis components
 │   │   ├── context/
-│   │   │   └── AuthContext.jsx     # Auth state management
+│   │   │   └── AuthContext.tsx     # Auth state management
 │   │   ├── services/
-│   │   │   └── api.js              # Axios instance + interceptors
+│   │   │   └── api.ts              # Axios instance + interceptors
 │   │   └── styles/
 │   │       ├── theme.css           # Design tokens + global styles
 │   │       └── animations.css      # Keyframe animations
+│   ├── tsconfig.json
 │   └── package.json
 │
 ├── api/tests/                      # Backend test suite (pytest)
@@ -217,6 +227,8 @@ skillpath.ai/
 ├── run.js                          # Cross-platform helper to run venv Python commands
 ├── dev.js                          # Starts backend + frontend together
 ├── pytest.ini                      # Pytest configuration
+├── alembic.ini                     # Alembic migration configuration
+├── docker-compose.yml              # PostgreSQL service for local development
 ├── bun.lock                        # Bun lockfile (committed, used with --frozen-lockfile)
 ├── package.json                    # Root scripts (setup, dev, build) — run with Bun
 ├── .env.example                    # Environment variable template
@@ -276,7 +288,10 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # Security (required in production)
 JWT_SECRET_KEY=at-least-32-random-characters-please
 
-# Database
+# Database: leave DATABASE_URL empty to use SQLite (DB_FILE above).
+# For PostgreSQL, set DATABASE_URL and leave DB_FILE empty.
+# Format: postgresql://user:password@host:5432/dbname
+# DATABASE_URL=postgresql://skillpath:skillpath@localhost:5432/skillpath
 DB_FILE=api/cv.db
 
 # CORS
@@ -287,7 +302,7 @@ ENV=development
 
 # Admin account (auto-created on first boot if both set)
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+ADMIN_PASSWORD=change_me_in_production
 ```
 
 Optional:
@@ -314,7 +329,7 @@ THEIRSTACK_API_KEY=your_key
 RATE_LIMIT_PER_MINUTE=120
 ```
 
-> **Email verification**: Registration sends a 6-digit OTP by email before login is allowed. In development with SMTP unconfigured, the OTP is returned as `debug_otp` in the API response so the flow stays testable. In production, missing SMTP config makes registration fail with 503.
+> **Email verification**: Registration sends a 6-digit OTP by email before login is allowed. SMTP must be configured for this to work — without it, registration and password reset return 503.
 
 ### Manual Setup
 
@@ -345,7 +360,7 @@ bun run dev
 
 ## Running Tests
 
-The backend ships with a pytest suite (72 tests: API integration, unit, and security regressions):
+The backend ships with a pytest suite (73 tests: API integration, unit, and security regressions):
 
 ```bash
 source venvapp/bin/activate
@@ -378,7 +393,7 @@ The 379MB local LLM model is fetched via Git LFS during checkout, so CI clones s
 | POST | `/api/auth/register` | Create new user account (email OTP verification) | No |
 | POST | `/api/auth/verify-email` | Verify email with 6-digit OTP | No |
 | POST | `/api/auth/resend-otp` | Resend email verification OTP | No |
-| POST | `/api/auth/login` | Authenticate (returns httpOnly cookies) | No |
+| POST | `/api/auth/login` | Authenticate with username or email (returns httpOnly cookies) | No |
 | POST | `/api/auth/logout` | Invalidate refresh token | Yes |
 | POST | `/api/auth/refresh` | Rotate refresh token | Cookie |
 | POST | `/api/auth/change-password` | Change password | Yes |
@@ -518,7 +533,7 @@ The 379MB local LLM model is fetched via Git LFS during checkout, so CI clones s
 
 ## Database
 
-SQLite database (`api/cv.db`) with 38 tables:
+Dual support: **SQLite** (`api/cv.db`) for local development or **PostgreSQL** (via `DATABASE_URL`) for production. A `docker-compose.yml` is included for running PostgreSQL locally. Schema defined in SQLAlchemy (`api/models.py`) with **Alembic migrations** auto-applied on boot. 38 tables:
 
 | Table | Purpose |
 |-------|---------|
@@ -560,7 +575,7 @@ On first boot, the database is automatically seeded with:
 | **Account Deactivation** | `is_active` flag enforced at login + all auth dependencies |
 | **File Validation** | Magic-byte checking (`%PDF`, `PK\x03\x04`), not just extension |
 | **Input Validation** | Pydantic models with `max_length` and pattern constraints |
-| **Rate Limiting** | IP-based bucketing middleware |
+| **Rate Limiting** | IP-based bucketing (relaxed in dev: 1000/min, strict in prod: 120/min) |
 | **CORS** | Restricted to configured origins |
 | **Admin Protection** | Role-based route exclusion (`excludedRoles` prop) |
 | **Email Verification** | 6-digit OTP required before login (hashed in DB, expiry + attempt limits) |
@@ -575,7 +590,8 @@ Found a security issue? **Do not open a public issue.** Email the maintainers or
 
 | Decision | Rationale |
 |----------|-----------|
-| SQLite over PostgreSQL | Zero-config, single-file deployment for MVP |
+| SQLite + PostgreSQL dual support | SQLite for zero-config local dev, PostgreSQL for production (via `DATABASE_URL`) |
+| Alembic migrations | Schema versioned in SQLAlchemy, auto-applied on boot |
 | httpOnly cookies over localStorage JWT | Prevents XSS token theft |
 | SHA-256 hashed refresh tokens | Database stores hashes, not raw tokens |
 | Two-tier parsing (AI + local fallback) | Works offline, AI for quality |
@@ -602,7 +618,7 @@ Found a security issue? **Do not open a public issue.** Email the maintainers or
 ### Key Patterns
 
 - **Backend routing**: Split across `api/routes/` modules, included in `main.py`
-- **Frontend routes**: Lazy-loaded in `App.jsx` via `React.lazy`
+- **Frontend routes**: Lazy-loaded in `App.tsx` via `React.lazy`
 - **Component structure**: Feature-scoped directories under `frontend/src/components/` (e.g., `analyzer/`, `results/`, `sidebar/`) with barrel `index.js` files
 - **State management**: React Context (`AuthContext`) + local component state
 - **API calls**: Centralized Axios instance with 401 interceptor
@@ -662,8 +678,10 @@ If this project helped you, consider giving it a ⭐ — it helps others find it
 - [x] Mock interviews (static + AI), JD comparison, team ranking
 - [x] Admin panel with analytics, audit, and data export
 - [x] Email verification (OTP) and password reset
+- [x] PostgreSQL support for production scaling (dual SQLite/PostgreSQL via `DATABASE_URL`)
+- [x] TypeScript migration (frontend fully typed, strict mode)
+- [x] Alembic schema migrations (versioned, auto-applied)
 - [ ] Docker deployment (backend + frontend containers)
-- [ ] PostgreSQL support for production scaling
 - [ ] i18n beyond English (structure exists in `api/i18n.py`)
 - [ ] OAuth login (Google/GitHub)
 
