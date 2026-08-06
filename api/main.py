@@ -211,11 +211,13 @@ seed_courses()
 
 _validate_env()
 
-RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
 _last_rate_limit_cleanup = 0
 RATE_LIMIT_CLEANUP_INTERVAL = 300  # 5 minutes
 ENV = os.getenv("ENV", "development").lower()
 IS_PROD = ENV in ("production", "prod")
+
+# Relaxed rate limit in development so local testing isn't annoying.
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120" if IS_PROD else "1000"))
 
 _raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 CORS_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip() and o.strip() != "*"]

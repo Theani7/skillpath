@@ -32,17 +32,20 @@ logger = logging.getLogger("resume-analyzer")
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 MAX_LOGIN_ATTEMPTS = 5
-LOGIN_LOCKOUT_MINUTES = 15
-AUTH_RATE_LIMIT_PER_MINUTE = 20
 
 OTP_LENGTH = 6
 OTP_TTL_SECONDS = 10 * 60
 OTP_MAX_ATTEMPTS = 5
-OTP_RESEND_COOLDOWN_SECONDS = 60
 RESET_TOKEN_TTL_SECONDS = 10 * 60
 
 ENV = os.getenv("ENV", "development").lower()
 IS_PROD = ENV in ("production", "prod")
+
+# In development, rate limits are relaxed so local testing isn't annoying.
+# In production, these values are enforced strictly.
+LOGIN_LOCKOUT_MINUTES = 1 if IS_PROD else 0
+AUTH_RATE_LIMIT_PER_MINUTE = 20 if IS_PROD else 1000
+OTP_RESEND_COOLDOWN_SECONDS = 60 if IS_PROD else 5
 
 
 class UserRegister(BaseModel):
