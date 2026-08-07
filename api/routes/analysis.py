@@ -354,7 +354,7 @@ def submit_feedback(feedback: Feedback, current_user: dict = Depends(get_current
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         cursor.execute(
-            "INSERT INTO user_feedback (feed_name, feed_email, feed_score, comments, Timestamp) VALUES (%s, %s, %s, %s, %s)",
+            """INSERT INTO user_feedback (feed_name, feed_email, feed_score, comments, "Timestamp") VALUES (%s, %s, %s, %s, %s)""",
             (feedback.name, feedback.email, feedback.score, feedback.comments, timestamp)
         )
         conn.commit()

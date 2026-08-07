@@ -49,12 +49,12 @@ def get_latest_analysis(current_user: dict = Depends(get_current_user)):
         cursor = conn.cursor()
         cursor.execute(
             '''
-            SELECT ID, "Timestamp", "Predicted_Field", resume_score, target_role,
+            SELECT id, "Timestamp", "Predicted_Field", resume_score, target_role,
                    missing_skills, "Actual_skills", "Recommended_skills",
                    pdf_name, analysis_data
             FROM user_data
             WHERE user_id = %s
-            ORDER BY ID DESC
+            ORDER BY id DESC
             LIMIT 1
             ''',
             (current_user['id'],),
@@ -129,10 +129,10 @@ def get_user_history(current_user: dict = Depends(get_current_user)):
     try:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT ID, "Timestamp", "Predicted_Field", resume_score, target_role, missing_skills, "Actual_skills", "Recommended_skills", analysis_data
+            SELECT id, "Timestamp", "Predicted_Field", resume_score, target_role, missing_skills, "Actual_skills", "Recommended_skills", analysis_data
             FROM user_data
             WHERE user_id = %s
-            ORDER BY ID DESC
+            ORDER BY id DESC
         ''', (current_user['id'],))
         rows = cursor.fetchall()
     finally:
@@ -149,7 +149,7 @@ def get_user_history(current_user: dict = Depends(get_current_user)):
                 pass
                 
         history.append({
-            "id": row['ID'],
+            "id": row['id'],
             "timestamp": row['Timestamp'],
             "predicted_field": row['Predicted_Field'],
             "target_role": row['target_role'],
@@ -193,7 +193,7 @@ def delete_user_analysis(analysis_id: int, current_user: dict = Depends(get_curr
         cursor = conn.cursor()
         # Get the analysis data and content_hash for cache cleanup
         cursor.execute(
-            "SELECT content_hash, target_role FROM user_data WHERE ID = %s AND user_id = %s",
+            "SELECT content_hash, target_role FROM user_data WHERE id = %s AND user_id = %s",
             (analysis_id, current_user['id']),
         )
         row = cursor.fetchone()
@@ -217,7 +217,7 @@ def delete_user_analysis(analysis_id: int, current_user: dict = Depends(get_curr
 
         # Delete the analysis itself
         cursor.execute(
-            "DELETE FROM user_data WHERE ID = %s AND user_id = %s",
+            "DELETE FROM user_data WHERE id = %s AND user_id = %s",
             (analysis_id, current_user['id']),
         )
         deleted = cursor.rowcount
@@ -384,10 +384,10 @@ def get_skill_trends(current_user: dict = Depends(get_current_user)):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            """SELECT ID, Timestamp, Actual_skills, missing_skills
+            """SELECT id, "Timestamp", "Actual_skills", missing_skills
             FROM user_data
             WHERE user_id = %s
-            ORDER BY ID ASC""",
+            ORDER BY id ASC""",
             (current_user["id"],),
         )
         rows = cursor.fetchall()
@@ -402,7 +402,7 @@ def get_skill_trends(current_user: dict = Depends(get_current_user)):
         actual = set(s.strip() for s in (row["Actual_skills"] or "").split(",") if s.strip())
         missing = set(s.strip() for s in (row["missing_skills"] or "").split(",") if s.strip())
         analyses.append({
-            "id": row["ID"],
+            "id": row["id"],
             "timestamp": row["Timestamp"],
             "skills": actual,
             "gaps": missing,

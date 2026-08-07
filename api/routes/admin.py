@@ -59,11 +59,11 @@ def get_admin_users(
         # Select only safe columns, exclude sensitive system info
         cursor.execute(
             """
-            SELECT ID, user_id, Name, Email_ID, Timestamp, Predicted_Field, resume_score,
-                   target_role, missing_skills, Actual_skills, Recommended_skills,
+            SELECT id, user_id, "Name", "Email_ID", "Timestamp", "Predicted_Field", resume_score,
+                   target_role, missing_skills, "Actual_skills", "Recommended_skills",
                    pdf_name
             FROM user_data
-            ORDER BY ID DESC
+            ORDER BY id DESC
             LIMIT %s OFFSET %s
             """,
             (limit, offset),
@@ -85,11 +85,11 @@ def get_admin_user_detail(analysis_id: int, current_admin: dict = Depends(get_cu
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT ID, user_id, "Name", "Email_ID", "Timestamp", "Predicted_Field", resume_score,
+            SELECT id, user_id, "Name", "Email_ID", "Timestamp", "Predicted_Field", resume_score,
                    target_role, missing_skills, "Actual_skills", "Recommended_skills",
                    pdf_name, analysis_data
             FROM user_data
-            WHERE ID = %s
+            WHERE id = %s
             """,
             (analysis_id,),
         )
@@ -111,7 +111,7 @@ def get_admin_feedback(
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT ID, feed_name, feed_email, feed_score, comments, Timestamp FROM user_feedback ORDER BY ID DESC LIMIT %s OFFSET %s",
+            """SELECT id, feed_name, feed_email, feed_score, comments, "Timestamp" FROM user_feedback ORDER BY id DESC LIMIT %s OFFSET %s""",
             (limit, offset),
         )
         rows = cursor.fetchall()
@@ -176,7 +176,7 @@ def delete_admin_feedback(feedback_id: int, current_admin: dict = Depends(get_cu
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM user_feedback WHERE ID = %s", (feedback_id,))
+        cursor.execute("DELETE FROM user_feedback WHERE id = %s", (feedback_id,))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -536,10 +536,10 @@ def uploads_over_time(current_admin: dict = Depends(get_current_admin)):
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT DATE(Timestamp) as date, COUNT(*) as count
+            SELECT DATE("Timestamp") as date, COUNT(*) as count
             FROM user_data
-            WHERE Timestamp IS NOT NULL AND Timestamp != ''
-            GROUP BY DATE(Timestamp)
+            WHERE "Timestamp" IS NOT NULL AND "Timestamp" != ''
+            GROUP BY DATE("Timestamp")
             ORDER BY date DESC
             LIMIT 30
         """)
