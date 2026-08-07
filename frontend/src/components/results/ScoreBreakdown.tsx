@@ -8,7 +8,7 @@ type Props = {
 
 const ScoreBreakdownCard = ({ scoreBreakdown }: Props) => {
   return (
-    <div className="card" style={{ padding: '28px', marginBottom: '20px' }}>
+    <div className="card" style={{ padding: '28px', marginBottom: '20px', overflow: 'hidden' }}>
       <h3 style={{
         display: 'flex', alignItems: 'center', gap: '8px',
         fontSize: '16px', fontWeight: 'var(--font-bold)',
