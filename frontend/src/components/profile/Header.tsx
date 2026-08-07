@@ -156,4 +156,3 @@ const Header = ({ user, profile, avatarLetter, savedProfile, savedPrefs, profile
 );
 
 export default Header;
-er;
