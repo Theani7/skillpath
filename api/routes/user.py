@@ -108,7 +108,7 @@ def get_latest_analysis(current_user: dict = Depends(get_current_user)):
 
     return {
         "found": True,
-        "id": row['ID'],
+        "id": row['id'],
         "timestamp": row['Timestamp'],
         "pdf_name": row['pdf_name'],
         "predicted_field": row['Predicted_Field'],
