@@ -26,12 +26,10 @@ api.interceptors.response.use(
     const isAuthMe = url.includes('/auth/me');
 
     if (status === 401 && !isAuthMe && !skipRedirect) {
+      // Clearing auth state re-renders the protected routes, which redirect to "/".
+      // Do not touch window.history here - React Router owns navigation.
       if (logoutHandler) {
         logoutHandler();
-      }
-      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-        window.history.pushState({}, '', '/');
-        window.dispatchEvent(new PopStateEvent('popstate'));
       }
     }
     return Promise.reject(error);

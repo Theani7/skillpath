@@ -30,7 +30,7 @@ class PreferencesInput(BaseModel):
     timeline_months: int = Field(default=6, ge=1, le=120)
     preferred_location: str = Field(default="", max_length=200)
     salary_target: int = Field(default=0, ge=0, le=10_000_000)
-    locale: str = Field(default="en", max_length=10)
+    locale: Optional[str] = Field(default=None, max_length=10)
 
 
 @router.get("/latest-analysis")
@@ -234,7 +234,15 @@ def get_user_profile(current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM user_profiles WHERE user_id = %s", (current_user["id"],))
+        cursor.execute(
+            """
+            SELECT user_id, full_name, phone, location, bio,
+                   current_job_role AS current_role,
+                   experience_years, linkedin_url, github_url, updated_at
+            FROM user_profiles WHERE user_id = %s
+            """,
+            (current_user["id"],),
+        )
         row = cursor.fetchone()
     finally:
         conn.close()
@@ -248,7 +256,7 @@ def update_user_profile(profile: UserProfileUpdate, current_user: dict = Depends
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO user_profiles(user_id, full_name, phone, location, bio, current_role, experience_years, linkedin_url, github_url, updated_at)
+            INSERT INTO user_profiles(user_id, full_name, phone, location, bio, current_job_role, experience_years, linkedin_url, github_url, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id) DO UPDATE SET
                 full_name = excluded.full_name,
@@ -290,13 +298,13 @@ def update_preferences(payload: PreferencesInput, current_user: dict = Depends(g
         cursor.execute(
             """
             INSERT INTO user_preferences(user_id, target_role, timeline_months, preferred_location, salary_target, locale, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, COALESCE(%s, 'en'), CURRENT_TIMESTAMP)
             ON CONFLICT(user_id) DO UPDATE SET
                 target_role = excluded.target_role,
                 timeline_months = excluded.timeline_months,
                 preferred_location = excluded.preferred_location,
                 salary_target = excluded.salary_target,
-                locale = excluded.locale,
+                locale = COALESCE(%s, user_preferences.locale),
                 updated_at = CURRENT_TIMESTAMP
             """,
             (
@@ -305,6 +313,7 @@ def update_preferences(payload: PreferencesInput, current_user: dict = Depends(g
                 payload.timeline_months,
                 payload.preferred_location,
                 payload.salary_target,
+                payload.locale,
                 payload.locale,
             ),
         )

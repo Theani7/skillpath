@@ -63,7 +63,7 @@ async def analyze_resume(
 ):
     contents = await file.read()
     if len(contents) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 5MB.")
     if not contents:
         raise HTTPException(status_code=400, detail="Empty file upload")
 
@@ -336,6 +336,10 @@ async def analyze_resume(
 
     except Exception as parse_error:
         logger.error(f"Analysis error for {safe_filename}: {parse_error}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
         conn.close()

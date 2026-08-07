@@ -58,12 +58,14 @@ def _load_user(username: str) -> Optional[dict]:
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        import psycopg2.errors
         try:
             cursor.execute(
                 "SELECT id, username, email, full_name, role, created_at, is_active FROM users WHERE username = %s",
                 (username,),
             )
-        except Exception:
+        except psycopg2.errors.UndefinedColumn:
+            conn.rollback()
             cursor.execute(
                 "SELECT id, username, email, full_name, role FROM users WHERE username = %s",
                 (username,),
@@ -116,7 +118,7 @@ async def get_current_optional_user(request: Request) -> Optional[dict]:
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
+            token = auth_header.split(" ", 1)[1]
     if not token:
         return None
     try:

@@ -390,6 +390,20 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
     setIsTransitioning(true);
     setTimeout(() => {
       setActiveTab(tab);
+      // Reset per-flow step state so a half-finished OTP flow does not leak
+      // into the other tab.
+      setLoginStep('login');
+      setRegStep('form');
+      setLoginError('');
+      setRegError('');
+      setVerifyError('');
+      setForgotError('');
+      setOtpDigits(Array(OTP_LENGTH).fill(''));
+      setForgotOtp(Array(OTP_LENGTH).fill(''));
+      setUnverifiedAccount(false);
+      setResendVerifMsg('');
+      setRegistrationSuccess(false);
+      setForgotSuccess(false);
       setTimeout(() => setIsTransitioning(false), 50);
     }, 150);
   };

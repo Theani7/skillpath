@@ -447,7 +447,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
                 detail="Account has been deactivated. Contact an administrator.",
             )
 
-        cursor.execute("DELETE FROM login_attempts WHERE username = %s", (username,))
+        cursor.execute("DELETE FROM login_attempts WHERE username = %s", (login_key,))
         cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (user_dict["id"],))
         conn.commit()
 

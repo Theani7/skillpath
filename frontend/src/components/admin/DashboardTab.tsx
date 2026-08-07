@@ -8,7 +8,7 @@ import { Row } from './DataTable';
 import { StatCard } from './StatCard';
 
 type FeedbackItem = {
-  ID: number;
+  id: number;
   feed_name: string;
   feed_email: string;
   feed_score: number;

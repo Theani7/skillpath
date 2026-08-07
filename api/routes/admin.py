@@ -3,6 +3,7 @@ import logging
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from psycopg2 import sql
 from pydantic import BaseModel, Field
 
 from api.auth import get_current_admin
@@ -263,23 +264,18 @@ def update_user_status(user_id: int, body: StatusUpdate, current_admin: dict = D
 @router.delete("/api/admin/registered-users/{user_id}")
 def delete_registered_user(user_id: int, current_admin: dict = Depends(get_current_admin)):
     """Delete (ban) a registered user and cascade-delete their data."""
-    # Prevent deleting the last admin
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+        # Lock the row so the admin-count check can't race with a concurrent change
+        cursor.execute("SELECT role FROM users WHERE id = %s FOR UPDATE", (user_id,))
         user = cursor.fetchone()
         if user and user["role"] == "admin":
             cursor.execute("SELECT COUNT(*) as admin_count FROM users WHERE role = 'admin'")
             admin_count = cursor.fetchone()["admin_count"]
             if admin_count <= 1:
                 raise HTTPException(status_code=400, detail="Cannot delete the last admin account")
-    finally:
-        conn.close()
 
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
         cursor.execute("DELETE FROM user_data WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM user_profiles WHERE user_id = %s", (user_id,))
@@ -1163,14 +1159,19 @@ def export_table(table_name: str, current_admin: dict = Depends(get_current_admi
         "field_keywords", "industry_trends", "market_role_aliases",
         "skill_recommendations", "roadmap_templates", "learning_actions",
         "learning_resources", "skill_difficulty", "skill_clusters",
-        "video_resources", "role_configs",
+        "video_resources", "role_configs", "job_role_skills",
+        "career_roadmaps", "roadmap_steps", "user_profiles",
+        "user_preferences", "user_roadmap_progress", "notifications",
+        "subscriptions", "shared_reports", "request_logs",
     ]
     if table_name not in allowed_tables:
         raise HTTPException(status_code=400, detail=f"Cannot export table: {table_name}")
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute(f"SELECT * FROM {table_name} LIMIT 1000")
+        cursor.execute(
+            sql.SQL("SELECT * FROM {} LIMIT 1000").format(sql.Identifier(table_name))
+        )
         rows = cursor.fetchall()
     finally:
         conn.close()

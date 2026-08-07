@@ -47,7 +47,7 @@ const Admin = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const { user } = useAuth();
   const [resumes, setResumes] = useState<AdminUserRow[]>([]);
-  const [feedback, setFeedback] = useState<Array<{ ID: number; feed_name: string; feed_email: string; feed_score: number; comments: string; Timestamp: string }>>([]);
+  const [feedback, setFeedback] = useState<Array<{ id: number; feed_name: string; feed_email: string; feed_score: number; comments: string; Timestamp: string }>>([]);
   const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
   const [userSearch, setUserSearch] = useState<string>('');
   const [courses, setCourses] = useState<AdminCourse[]>([]);

@@ -76,9 +76,14 @@ const Analyzer = () => {
     formData.append('file', file);
     formData.append('target_role', targetRole);
     try {
-      await api.post('/api/analyze', formData, {
+      const res = await api.post('/api/analyze', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      if (res.data?.error) {
+        setError(res.data.error);
+        setLoading(false);
+        return;
+      }
       navigate('/analysis', { replace: true });
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;

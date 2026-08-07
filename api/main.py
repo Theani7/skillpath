@@ -184,27 +184,23 @@ from api.seed_data import (
     load_difficulty_cache, load_clusters_cache, load_videos_cache,
     load_role_configs_cache,
 )
-seed_skills_taxonomy()
-load_skills_cache()
-seed_market_data()
-load_market_cache()
-seed_skill_recommendations()
-load_skill_recs_cache()
-seed_roadmap_templates()
-load_roadmaps_cache()
-seed_learning_actions()
-load_actions_cache()
-seed_learning_resources()
-load_resources_cache()
-seed_skill_difficulty()
-load_difficulty_cache()
-seed_skill_clusters()
-load_clusters_cache()
-seed_video_resources()
-load_videos_cache()
-seed_role_configs()
-load_role_configs_cache()
-seed_courses()
+for _step in (
+    seed_skills_taxonomy, load_skills_cache,
+    seed_market_data, load_market_cache,
+    seed_skill_recommendations, load_skill_recs_cache,
+    seed_roadmap_templates, load_roadmaps_cache,
+    seed_learning_actions, load_actions_cache,
+    seed_learning_resources, load_resources_cache,
+    seed_skill_difficulty, load_difficulty_cache,
+    seed_skill_clusters, load_clusters_cache,
+    seed_video_resources, load_videos_cache,
+    seed_role_configs, load_role_configs_cache,
+    seed_courses,
+):
+    try:
+        _step()
+    except Exception as _seed_err:
+        logger.error(f"Seed step '{_step.__name__}' failed: {_seed_err}", exc_info=True)
 
 _validate_env()
 
@@ -239,13 +235,15 @@ async def add_security_headers(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    csp_script_src = "script-src 'self'" if IS_PROD else "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    csp_connect_src = "connect-src 'self' https:" if IS_PROD else "connect-src 'self' https: ws: wss:"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self'; "
+        f"{csp_script_src}; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https:; "
         "font-src 'self' data:; "
-        "connect-src 'self' https:; "
+        f"{csp_connect_src}; "
         "frame-ancestors 'none'; "
         "base-uri 'self';"
     )

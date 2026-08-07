@@ -247,7 +247,7 @@ def init_db():
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_profiles (
-                user_id INTEGER PRIMARY KEY,
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                 full_name VARCHAR(200) DEFAULT '',
                 phone VARCHAR(50) DEFAULT '',
                 location VARCHAR(200) DEFAULT '',
@@ -262,7 +262,7 @@ def init_db():
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_preferences (
-                user_id INTEGER PRIMARY KEY,
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                 target_role VARCHAR(200) DEFAULT '',
                 timeline_months INTEGER DEFAULT 6,
                 preferred_location VARCHAR(200) DEFAULT '',
@@ -287,7 +287,7 @@ def init_db():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS notifications (
                 id BIGSERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 channel VARCHAR(30) NOT NULL DEFAULT 'email',
                 message TEXT NOT NULL,
                 status VARCHAR(30) NOT NULL DEFAULT 'pending',
@@ -298,7 +298,7 @@ def init_db():
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS subscriptions (
-                user_id INTEGER PRIMARY KEY,
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                 plan VARCHAR(40) NOT NULL DEFAULT 'free',
                 status VARCHAR(30) NOT NULL DEFAULT 'active',
                 renews_at INTEGER DEFAULT 0,
@@ -408,6 +408,10 @@ def init_db():
                 CONSTRAINT uq_user_roadmap_progress UNIQUE (user_id, analysis_id, phase_index, task_index)
             )
         """)
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_roadmap_progress_unique "
+            "ON user_roadmap_progress (user_id, COALESCE(analysis_id, -1), phase_index, task_index)"
+        )
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS login_attempts (
@@ -579,7 +583,6 @@ def init_db():
         """)
 
         # --- Indexes ---
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_single_admin ON users(role) WHERE role = 'admin'")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_data_user_id ON user_data(user_id)")
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_data_timestamp ON user_data("Timestamp")')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_data_predicted_field ON user_data("Predicted_Field")')
