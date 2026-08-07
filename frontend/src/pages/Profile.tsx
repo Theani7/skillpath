@@ -28,7 +28,7 @@ type PrefsDraft = {
 
 const emptyProfile: ProfileDraft = {
   full_name: '', phone: '', location: '', bio: '',
-  current_role: '', experience_years: '',
+  current_job_role: '', experience_years: '',
   linkedin_url: '', github_url: '',
 };
 

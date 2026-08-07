@@ -252,7 +252,7 @@ def init_db():
                 phone VARCHAR(50) DEFAULT '',
                 location VARCHAR(200) DEFAULT '',
                 bio TEXT DEFAULT '',
-                current_role VARCHAR(100) DEFAULT '',
+                current_job_role VARCHAR(100) DEFAULT '',
                 experience_years VARCHAR(10) DEFAULT '',
                 linkedin_url VARCHAR(500) DEFAULT '',
                 github_url VARCHAR(500) DEFAULT '',

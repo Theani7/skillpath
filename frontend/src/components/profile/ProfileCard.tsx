@@ -115,7 +115,7 @@ const ProfileCard = ({ profile, profileDraft, editingProfile, savingProfile, set
           <DetailRow icon={User} label="Full Name" value={profile.full_name || '—'} />
           <DetailRow icon={Phone} label="Phone" value={profile.phone || '—'} />
           <DetailRow icon={MapPin} label="Location" value={profile.location || '—'} />
-          <DetailRow icon={Briefcase} label="Current Role" value={profile.current_role || '—'} />
+          <DetailRow icon={Briefcase} label="Current Role" value={profile.current_job_role || '—'} />
           <DetailRow icon={Clock} label="Experience" value={profile.experience_years ? `${profile.experience_years} years` : '—'} />
           <DetailRow icon={Linkedin} label="LinkedIn" value={profile.linkedin_url} link />
           <DetailRow icon={Github} label="GitHub" value={profile.github_url} link />

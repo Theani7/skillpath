@@ -172,7 +172,7 @@ export interface UserProfile {
   phone: string;
   location: string;
   bio: string;
-  current_role: string;
+  current_job_role: string;
   experience_years: string;
   linkedin_url: string;
   github_url: string;

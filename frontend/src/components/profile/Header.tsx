@@ -59,7 +59,7 @@ const Header = ({ user, profile, avatarLetter, savedProfile, savedPrefs, profile
             )}
             {profile.current_role && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                <Briefcase size={13} /> {profile.current_role}
+                <Briefcase size={13} /> {profile.current_job_role}
               </span>
             )}
           </div>
@@ -156,3 +156,4 @@ const Header = ({ user, profile, avatarLetter, savedProfile, savedPrefs, profile
 );
 
 export default Header;
+er;
