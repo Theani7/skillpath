@@ -24,9 +24,10 @@ const ScoreBreakdownCard = ({ scoreBreakdown }: Props) => {
         Technical Score Breakdown
       </h3>
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        display: 'flex',
         gap: '12px',
+        overflowX: 'auto',
+        paddingBottom: '8px',
       }}>
         {(Object.entries(scoreBreakdown) as [string, { score?: number; status: string }][]).map(([key, val]) => {
           const present = val.status === 'present';
@@ -35,6 +36,7 @@ const ScoreBreakdownCard = ({ scoreBreakdown }: Props) => {
               textAlign: 'center', padding: '16px 12px',
               background: 'var(--color-bg)', borderRadius: 'var(--radius-lg)',
               border: '1px solid var(--color-border)',
+              minWidth: '140px', flex: '0 0 auto',
             }}>
               <div style={{
                 fontSize: '24px', fontWeight: 'var(--font-extrabold)',
