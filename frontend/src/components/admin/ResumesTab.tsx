@@ -26,7 +26,7 @@ const ResumesTab = ({ rows, total, page, pageSize, onPageChange, onView, onDelet
           render: (r) => {
             const item = r as unknown as AdminUserRow;
             return (
-              <button type="button" onClick={() => onView(item.ID)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: '12px', cursor: 'pointer' }}>
+              <button type="button" onClick={() => onView(item.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: '12px', cursor: 'pointer' }}>
                 View
               </button>
             );
@@ -34,7 +34,7 @@ const ResumesTab = ({ rows, total, page, pageSize, onPageChange, onView, onDelet
         },
       ]}
       rows={rows as unknown as Record<string, unknown>[]}
-      keyField="ID"
+      keyField="id"
       empty="No resume analyses yet."
       onDelete={onDelete}
       deleteLabel="Delete log"

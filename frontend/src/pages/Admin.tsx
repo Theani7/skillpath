@@ -141,7 +141,7 @@ const Admin = () => {
     confirmLabel: 'Delete',
     onConfirm: () => runAction('delete log', async () => {
       await api.delete(`/api/admin/users/${id}`);
-      setResumes((prev) => prev.filter((u) => u.ID !== id));
+      setResumes((prev) => prev.filter((u) => u.id !== id));
     }, 'Resume log deleted.'),
   });
 
@@ -151,7 +151,7 @@ const Admin = () => {
     confirmLabel: 'Delete',
     onConfirm: () => runAction('delete feedback', async () => {
       await api.delete(`/api/admin/feedback/${id}`);
-      setFeedback((prev) => prev.filter((f) => f.ID !== id));
+      setFeedback((prev) => prev.filter((f) => f.id !== id));
     }, 'Feedback deleted.'),
   });
 

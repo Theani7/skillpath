@@ -235,7 +235,7 @@ export interface ProjectRec {
 }
 
 export interface AdminUserRow {
-  ID: number;
+  id: number;
   user_id: number;
   Name: string;
   Email_ID: string;

@@ -4,7 +4,7 @@ import { DataTable } from './DataTable';
 import { truncate } from './adminUtils';
 
 type FeedbackItem = {
-  ID: number;
+  id: number;
   feed_name: string;
   feed_email: string;
   feed_score: number | string;
@@ -97,7 +97,7 @@ const FeedbackTab = ({ feedback, stats, page, total, pageSize, onPageChange, onD
         { label: 'When', render: (f) => f.Timestamp as ReactNode },
       ]}
       rows={feedback as unknown as Record<string, unknown>[]}
-      keyField="ID"
+      keyField="id"
       empty="No feedback yet."
       onDelete={onDelete}
       deleteLabel="Delete feedback"
