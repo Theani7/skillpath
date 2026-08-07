@@ -67,11 +67,11 @@ def _check_strict_rate_limit(key: str, limit: int = AUTH_RATE_LIMIT_PER_MINUTE):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO rate_limits (key, count, updated_at) VALUES (?, 1, ?) "
-            "ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = ?",
+            "INSERT INTO rate_limits (key, count, updated_at) VALUES (%s, 1, %s) "
+            "ON CONFLICT (key) DO UPDATE SET count = rate_limits.count + 1, updated_at = %s",
             (bucket, now_minute, now_minute),
         )
-        cursor.execute("SELECT count FROM rate_limits WHERE key = ?", (bucket,))
+        cursor.execute("SELECT count FROM rate_limits WHERE key = %s", (bucket,))
         row = cursor.fetchone()
         count = row["count"] if row else 1
         conn.commit()
@@ -126,7 +126,7 @@ def _send_otp(email: str, otp: str, purpose: str) -> dict:
 
 def _store_otp(cursor, conn, email: str, purpose: str, otp: str) -> None:
     cursor.execute(
-        "INSERT INTO otp_codes (email, purpose, code_hash, expires_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO otp_codes (email, purpose, code_hash, expires_at) VALUES (%s, %s, %s, %s)",
         (email, purpose, _hash_code(otp), int(time.time()) + OTP_TTL_SECONDS),
     )
     conn.commit()
@@ -141,13 +141,13 @@ def _consume_otp(email: str, purpose: str, otp: str) -> Optional[int]:
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "DELETE FROM otp_codes WHERE expires_at < ?",
+            "DELETE FROM otp_codes WHERE expires_at < %s",
             (int(time.time()),),
         )
         conn.commit()
         cursor.execute(
             "SELECT id, code_hash, attempts FROM otp_codes "
-            "WHERE email = ? AND purpose = ? AND used = 0 "
+            "WHERE email = %s AND purpose = %s AND used = 0 "
             "ORDER BY id DESC LIMIT 1",
             (email, purpose),
         )
@@ -155,18 +155,18 @@ def _consume_otp(email: str, purpose: str, otp: str) -> Optional[int]:
         if not row:
             return None
         if int(row["attempts"]) >= OTP_MAX_ATTEMPTS:
-            cursor.execute("UPDATE otp_codes SET used = 1 WHERE id = ?", (row["id"],))
+            cursor.execute("UPDATE otp_codes SET used = 1 WHERE id = %s", (row["id"],))
             conn.commit()
             return None
         if _hash_code(otp) != row["code_hash"]:
             cursor.execute(
-                "UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?",
+                "UPDATE otp_codes SET attempts = attempts + 1 WHERE id = %s",
                 (row["id"],),
             )
             conn.commit()
             return None
-        cursor.execute("UPDATE otp_codes SET used = 1 WHERE id = ?", (row["id"],))
-        cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+        cursor.execute("UPDATE otp_codes SET used = 1 WHERE id = %s", (row["id"],))
+        cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
         user_row = cursor.fetchone()
         user_id = user_row["id"] if user_row else None
         conn.commit()
@@ -201,7 +201,7 @@ def resend_verification(payload: ResendVerificationRequest, request: Request):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, email, email_verified FROM users WHERE username = ?",
+            "SELECT id, email, email_verified FROM users WHERE username = %s",
             (payload.username,),
         )
         user = cursor.fetchone()
@@ -209,7 +209,7 @@ def resend_verification(payload: ResendVerificationRequest, request: Request):
             return {"status": "success", "message": "If your account needs verification, a new code has been sent."}
         email = user["email"]
         cursor.execute(
-            "SELECT created_at FROM otp_codes WHERE email = ? AND purpose = 'register' "
+            "SELECT created_at FROM otp_codes WHERE email = %s AND purpose = 'register' "
             "ORDER BY id DESC LIMIT 1",
             (email,),
         )
@@ -251,7 +251,7 @@ def check_username(username: str, request: Request):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
         exists = cursor.fetchone() is not None
     finally:
         conn.close()
@@ -266,12 +266,12 @@ def register_user(user: UserRegister, request: Request):
         cursor = conn.cursor()
 
         # Check if username exists
-        cursor.execute("SELECT * FROM users WHERE username = ?", (user.username,))
+        cursor.execute("SELECT * FROM users WHERE username = %s", (user.username,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Username already registered")
 
         # Check if email exists
-        cursor.execute("SELECT * FROM users WHERE email = ?", (user.email,))
+        cursor.execute("SELECT * FROM users WHERE email = %s", (user.email,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -288,7 +288,7 @@ def register_user(user: UserRegister, request: Request):
         hashed_password = get_password_hash(user.password)
         cursor.execute(
             "INSERT INTO users (username, email, full_name, hashed_password, role, email_verified) "
-            "VALUES (?, ?, ?, ?, 'user', 0)",
+            "VALUES (%s, %s, %s, %s, 'user', 0)",
             (user.username, user.email, user.full_name, hashed_password)
         )
         _store_otp(cursor, conn, user.email, "register", otp)
@@ -315,7 +315,7 @@ def verify_email(payload: EmailOTPRequest, request: Request):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
+        cursor.execute("UPDATE users SET email_verified = 1 WHERE id = %s", (user_id,))
         conn.commit()
     finally:
         conn.close()
@@ -330,7 +330,7 @@ def resend_otp(payload: ResendOTPRequest, request: Request):
         cursor = conn.cursor()
         cursor.execute(
             "SELECT created_at FROM otp_codes "
-            "WHERE email = ? AND purpose = ? ORDER BY id DESC LIMIT 1",
+            "WHERE email = %s AND purpose = %s ORDER BY id DESC LIMIT 1",
             (payload.email, payload.purpose),
         )
         last = cursor.fetchone()
@@ -348,9 +348,9 @@ def resend_otp(payload: ResendOTPRequest, request: Request):
                     detail=f"Please wait {remaining} seconds before requesting a new code.",
                 )
         if payload.purpose == "register":
-            cursor.execute("SELECT id FROM users WHERE email = ? AND email_verified = 0", (payload.email,))
+            cursor.execute("SELECT id FROM users WHERE email = %s AND email_verified = 0", (payload.email,))
         else:
-            cursor.execute("SELECT id FROM users WHERE email = ?", (payload.email,))
+            cursor.execute("SELECT id FROM users WHERE email = %s", (payload.email,))
         user_row = cursor.fetchone()
         if not user_row:
             raise HTTPException(status_code=404, detail="No pending verification found for this email")
@@ -390,14 +390,14 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
         # Accept both username and email for login
         is_email = "@" in username
         if is_email:
-            cursor.execute("SELECT * FROM users WHERE email = ?", (username,))
+            cursor.execute("SELECT * FROM users WHERE email = %s", (username,))
         else:
-            cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+            cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
         user = cursor.fetchone()
 
         # Check for existing lockout (by username, since that's what we track)
         login_key = user["username"] if user else username
-        cursor.execute("SELECT * FROM login_attempts WHERE username = ?", (login_key,))
+        cursor.execute("SELECT * FROM login_attempts WHERE username = %s", (login_key,))
         attempt_row = cursor.fetchone()
 
         if attempt_row:
@@ -415,12 +415,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
                 attempts = attempt_row["attempts"] + 1
                 locked_until = now + (LOGIN_LOCKOUT_MINUTES * 60) if attempts >= MAX_LOGIN_ATTEMPTS else 0
                 cursor.execute(
-                    "UPDATE login_attempts SET attempts = ?, locked_until = ? WHERE username = ?",
+                    "UPDATE login_attempts SET attempts = %s, locked_until = %s WHERE username = %s",
                     (attempts, locked_until, login_key)
                 )
             else:
                 cursor.execute(
-                    "INSERT INTO login_attempts (username, attempts, first_attempt, locked_until) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO login_attempts (username, attempts, first_attempt, locked_until) VALUES (%s, %s, %s, %s)",
                     (login_key, 1, now, 0)
                 )
             conn.commit()
@@ -447,8 +447,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
                 detail="Account has been deactivated. Contact an administrator.",
             )
 
-        cursor.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
-        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (user_dict["id"],))
+        cursor.execute("DELETE FROM login_attempts WHERE username = %s", (username,))
+        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (user_dict["id"],))
         conn.commit()
 
         access_token = create_access_token(
@@ -458,7 +458,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
         refresh_payload = decode_token(refresh_token)
         token_hash = hash_token(refresh_token)
         cursor.execute(
-            "INSERT INTO refresh_tokens(token, user_id, expires_at) VALUES (?, ?, ?)",
+            "INSERT INTO refresh_tokens(token, user_id, expires_at) VALUES (%s, %s, %s)",
             (token_hash, user_dict["id"], int(refresh_payload["exp"])),
         )
         conn.commit()
@@ -510,7 +510,7 @@ async def logout(request: Request, response: Response):
             conn = get_db_connection()
             try:
                 cursor = conn.cursor()
-                cursor.execute("DELETE FROM refresh_tokens WHERE token = ? AND user_id = (SELECT id FROM users WHERE username = ?)",
+                cursor.execute("DELETE FROM refresh_tokens WHERE token = %s AND user_id = (SELECT id FROM users WHERE username = %s)",
                                (hash_token(refresh), username))
                 conn.commit()
             except Exception as logout_err:
@@ -553,14 +553,14 @@ def refresh_access_token(request: Request, payload: RefreshTokenRequest, respons
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT user_id, expires_at FROM refresh_tokens WHERE token = ?",
+            "SELECT user_id, expires_at FROM refresh_tokens WHERE token = %s",
             (token_hash,),
         )
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=401, detail="Refresh token not recognized")
         if int(row["expires_at"]) < int(time.time()):
-            cursor.execute("DELETE FROM refresh_tokens WHERE token = ?", (token_hash,))
+            cursor.execute("DELETE FROM refresh_tokens WHERE token = %s", (token_hash,))
             conn.commit()
             raise HTTPException(status_code=401, detail="Refresh token expired")
 
@@ -570,14 +570,14 @@ def refresh_access_token(request: Request, payload: RefreshTokenRequest, respons
         )
         new_refresh_token = create_refresh_token(data={"sub": decoded.get("sub")})
         new_payload = decode_token(new_refresh_token)
-        cursor.execute("DELETE FROM refresh_tokens WHERE token = ?", (token_hash,))
+        cursor.execute("DELETE FROM refresh_tokens WHERE token = %s", (token_hash,))
         cursor.execute(
-            "INSERT INTO refresh_tokens(token, user_id, expires_at) VALUES (?, ?, ?)",
+            "INSERT INTO refresh_tokens(token, user_id, expires_at) VALUES (%s, %s, %s)",
             (hash_token(new_refresh_token), row["user_id"], int(new_payload["exp"])),
         )
         conn.commit()
         # Look up the user's role for the response
-        cursor.execute("SELECT role FROM users WHERE id = ?", (row["user_id"],))
+        cursor.execute("SELECT role FROM users WHERE id = %s", (row["user_id"],))
         user_row = cursor.fetchone()
         user_role = user_row["role"] if user_row else "user"
     finally:
@@ -630,11 +630,11 @@ def request_password_reset(payload: PasswordResetRequest, request: Request):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE email = ?", (payload.email,))
+        cursor.execute("SELECT id FROM users WHERE email = %s", (payload.email,))
         user = cursor.fetchone()
         if user:
             cursor.execute(
-                "SELECT created_at FROM otp_codes WHERE email = ? AND purpose = 'password_reset' "
+                "SELECT created_at FROM otp_codes WHERE email = %s AND purpose = 'password_reset' "
                 "ORDER BY id DESC LIMIT 1",
                 (payload.email,),
             )
@@ -679,7 +679,8 @@ def verify_reset_otp(payload: VerifyResetOTPRequest, request: Request):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT OR REPLACE INTO password_reset_tokens(token, user_id, expires_at, used) VALUES (?, ?, ?, 0)",
+            "INSERT INTO password_reset_tokens(token, user_id, expires_at, used) VALUES (%s, %s, %s, 0) "
+            "ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, expires_at = EXCLUDED.expires_at, used = 0",
             (reset_token, user_id, expires_at),
         )
         conn.commit()
@@ -698,7 +699,7 @@ def reset_password(payload: PasswordResetConfirm):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT token, user_id, expires_at, used FROM password_reset_tokens WHERE token = ?",
+            "SELECT token, user_id, expires_at, used FROM password_reset_tokens WHERE token = %s",
             (payload.token,),
         )
         row = cursor.fetchone()
@@ -708,11 +709,11 @@ def reset_password(payload: PasswordResetConfirm):
             raise HTTPException(status_code=400, detail="Token expired or already used")
 
         cursor.execute(
-            "UPDATE users SET hashed_password = ? WHERE id = ?",
+            "UPDATE users SET hashed_password = %s WHERE id = %s",
             (get_password_hash(payload.new_password), row["user_id"]),
         )
-        cursor.execute("UPDATE password_reset_tokens SET used = 1 WHERE token = ?", (payload.token,))
-        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (row["user_id"],))
+        cursor.execute("UPDATE password_reset_tokens SET used = 1 WHERE token = %s", (payload.token,))
+        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (row["user_id"],))
         conn.commit()
     finally:
         conn.close()
@@ -729,16 +730,16 @@ def change_password(payload: ChangePassword, request: Request, current_user: dic
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user["id"],))
+        cursor.execute("SELECT hashed_password FROM users WHERE id = %s", (current_user["id"],))
         row = cursor.fetchone()
         if not row or not verify_password(payload.current_password, row["hashed_password"]):
             raise HTTPException(status_code=401, detail="Current password is incorrect")
 
         cursor.execute(
-            "UPDATE users SET hashed_password = ? WHERE id = ?",
+            "UPDATE users SET hashed_password = %s WHERE id = %s",
             (get_password_hash(payload.new_password), current_user["id"]),
         )
-        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (current_user["id"],))
+        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (current_user["id"],))
         conn.commit()
     finally:
         conn.close()

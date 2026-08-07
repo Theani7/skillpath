@@ -219,7 +219,7 @@ def _get_role_skills_from_db(target_role: str) -> List[str]:
         cursor.execute(
             "SELECT js.skill_name FROM job_role_skills js "
             "JOIN job_roles jr ON js.job_role_id = jr.id "
-            "WHERE jr.title = ? AND jr.is_active = 1",
+            "WHERE jr.title = %s AND jr.is_active = 1",
             (target_role,)
         )
         skills = [row[0] for row in cursor.fetchall()]
@@ -239,7 +239,7 @@ def _get_required_skills_from_db(target_role: str) -> List[str]:
         cursor.execute(
             "SELECT js.skill_name FROM job_role_skills js "
             "JOIN job_roles jr ON js.job_role_id = jr.id "
-            "WHERE jr.title = ? AND jr.is_active = 1 AND js.is_required = 1",
+            "WHERE jr.title = %s AND jr.is_active = 1 AND js.is_required = 1",
             (target_role,)
         )
         skills = [row[0] for row in cursor.fetchall()]

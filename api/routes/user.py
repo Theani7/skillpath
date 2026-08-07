@@ -53,7 +53,7 @@ def get_latest_analysis(current_user: dict = Depends(get_current_user)):
                    missing_skills, Actual_skills, Recommended_skills,
                    pdf_name, analysis_data
             FROM user_data
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY ID DESC
             LIMIT 1
             ''',
@@ -67,10 +67,10 @@ def get_latest_analysis(current_user: dict = Depends(get_current_user)):
             cursor.execute(
                 "SELECT js.skill_name, js.is_required FROM job_role_skills js "
                 "JOIN job_roles jr ON js.job_role_id = jr.id "
-                "WHERE jr.title = ? AND jr.is_active = 1",
+                "WHERE jr.title = %s AND jr.is_active = 1",
                 (row['target_role'],),
             )
-            role_skills_info = [{"skill": r[0], "is_required": bool(r[1])} for r in cursor.fetchall()]
+            role_skills_info = [{"skill": r["skill_name"], "is_required": bool(r["is_required"])} for r in cursor.fetchall()]
     finally:
         conn.close()
 
@@ -131,7 +131,7 @@ def get_user_history(current_user: dict = Depends(get_current_user)):
         cursor.execute('''
             SELECT ID, Timestamp, Predicted_Field, resume_score, target_role, missing_skills, Actual_skills, Recommended_skills, analysis_data
             FROM user_data
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY ID DESC
         ''', (current_user['id'],))
         rows = cursor.fetchall()
@@ -172,7 +172,7 @@ def delete_user_history(current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM user_data WHERE user_id = ?", (current_user['id'],))
+        cursor.execute("DELETE FROM user_data WHERE user_id = %s", (current_user['id'],))
         deleted = cursor.rowcount
         conn.commit()
     finally:
@@ -193,7 +193,7 @@ def delete_user_analysis(analysis_id: int, current_user: dict = Depends(get_curr
         cursor = conn.cursor()
         # Get the analysis data and content_hash for cache cleanup
         cursor.execute(
-            "SELECT content_hash, target_role FROM user_data WHERE ID = ? AND user_id = ?",
+            "SELECT content_hash, target_role FROM user_data WHERE ID = %s AND user_id = %s",
             (analysis_id, current_user['id']),
         )
         row = cursor.fetchone()
@@ -203,21 +203,21 @@ def delete_user_analysis(analysis_id: int, current_user: dict = Depends(get_curr
         # Delete from analysis_cache if we have the content_hash
         if row['content_hash'] and row['target_role']:
             cursor.execute(
-                "DELETE FROM analysis_cache WHERE content_hash = ? AND target_role = ?",
+                "DELETE FROM analysis_cache WHERE content_hash = %s AND target_role = %s",
                 (row['content_hash'], row['target_role']),
             )
 
         # Delete from user_roadmap_progress for this analysis
-        cursor.execute("DELETE FROM user_roadmap_progress WHERE user_id = ? AND analysis_id = ?",
+        cursor.execute("DELETE FROM user_roadmap_progress WHERE user_id = %s AND analysis_id = %s",
                        (current_user['id'], analysis_id))
 
         # Delete from shared_reports for this analysis
-        cursor.execute("DELETE FROM shared_reports WHERE user_id = ? AND analysis_id = ?",
+        cursor.execute("DELETE FROM shared_reports WHERE user_id = %s AND analysis_id = %s",
                        (current_user['id'], analysis_id))
 
         # Delete the analysis itself
         cursor.execute(
-            "DELETE FROM user_data WHERE ID = ? AND user_id = ?",
+            "DELETE FROM user_data WHERE ID = %s AND user_id = %s",
             (analysis_id, current_user['id']),
         )
         deleted = cursor.rowcount
@@ -234,7 +234,7 @@ def get_user_profile(current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM user_profiles WHERE user_id = ?", (current_user["id"],))
+        cursor.execute("SELECT * FROM user_profiles WHERE user_id = %s", (current_user["id"],))
         row = cursor.fetchone()
     finally:
         conn.close()
@@ -249,7 +249,7 @@ def update_user_profile(profile: UserProfileUpdate, current_user: dict = Depends
         cursor.execute(
             """
             INSERT INTO user_profiles(user_id, full_name, phone, location, bio, current_role, experience_years, linkedin_url, github_url, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id) DO UPDATE SET
                 full_name = excluded.full_name,
                 phone = excluded.phone,
@@ -275,7 +275,7 @@ def get_preferences(current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM user_preferences WHERE user_id = ?", (current_user["id"],))
+        cursor.execute("SELECT * FROM user_preferences WHERE user_id = %s", (current_user["id"],))
         row = cursor.fetchone()
     finally:
         conn.close()
@@ -290,7 +290,7 @@ def update_preferences(payload: PreferencesInput, current_user: dict = Depends(g
         cursor.execute(
             """
             INSERT INTO user_preferences(user_id, target_role, timeline_months, preferred_location, salary_target, locale, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id) DO UPDATE SET
                 target_role = excluded.target_role,
                 timeline_months = excluded.timeline_months,
@@ -329,12 +329,12 @@ def get_roadmap_progress(analysis_id: Optional[int] = None, current_user: dict =
         cursor = conn.cursor()
         if analysis_id:
             cursor.execute(
-                "SELECT phase_index, task_index, completed FROM user_roadmap_progress WHERE user_id = ? AND analysis_id = ?",
+                "SELECT phase_index, task_index, completed FROM user_roadmap_progress WHERE user_id = %s AND analysis_id = %s",
                 (current_user["id"], analysis_id),
             )
         else:
             cursor.execute(
-                "SELECT phase_index, task_index, completed, analysis_id FROM user_roadmap_progress WHERE user_id = ?",
+                "SELECT phase_index, task_index, completed, analysis_id FROM user_roadmap_progress WHERE user_id = %s",
                 (current_user["id"],),
             )
         rows = cursor.fetchall()
@@ -357,7 +357,7 @@ def update_roadmap_progress(payload: RoadmapProgressUpdate, current_user: dict =
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO user_roadmap_progress (user_id, analysis_id, phase_index, task_index, completed, completed_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT(user_id, analysis_id, phase_index, task_index)
             DO UPDATE SET completed = excluded.completed,
                 completed_at = CASE WHEN excluded.completed = 1 THEN CURRENT_TIMESTAMP ELSE NULL END""",
@@ -386,7 +386,7 @@ def get_skill_trends(current_user: dict = Depends(get_current_user)):
         cursor.execute(
             """SELECT ID, Timestamp, Actual_skills, missing_skills
             FROM user_data
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY ID ASC""",
             (current_user["id"],),
         )
@@ -448,7 +448,7 @@ def delete_account(payload: DeleteAccountRequest, current_user: dict = Depends(g
         cursor = conn.cursor()
 
         # Verify password
-        cursor.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user['id'],))
+        cursor.execute("SELECT hashed_password FROM users WHERE id = %s", (current_user['id'],))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="User not found")
@@ -460,14 +460,14 @@ def delete_account(payload: DeleteAccountRequest, current_user: dict = Depends(g
         user_id = current_user['id']
 
         # Delete all user data
-        cursor.execute("DELETE FROM user_data WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM user_profiles WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM user_roadmap_progress WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM shared_reports WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        cursor.execute("DELETE FROM user_data WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM user_profiles WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM user_preferences WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM user_roadmap_progress WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM shared_reports WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
 
         conn.commit()
     finally:
@@ -492,7 +492,7 @@ def contact_support(payload: ContactSupportRequest, current_user: dict = Depends
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO notifications (user_id, channel, message, status, created_at)
-            VALUES (?, 'support', ?, 'pending', ?)""",
+            VALUES (%s, 'support', %s, 'pending', %s)""",
             (
                 current_user['id'],
                 f"[{payload.subject}] {payload.message}",

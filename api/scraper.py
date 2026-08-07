@@ -47,7 +47,7 @@ def simulate_trend_update():
             try:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "UPDATE skill_recommendations SET skill_name = ? WHERE field_name = ? AND skill_name = ?",
+                    "UPDATE skill_recommendations SET skill_name = %s WHERE field_name = %s AND skill_name = %s",
                     (new_skill, field, old_skill)
                 )
                 conn.commit()

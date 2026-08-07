@@ -57,7 +57,7 @@ def subscribe_plan(payload: BillingSubscribeRequest, current_user: dict = Depend
         cursor.execute(
             """
             INSERT INTO subscriptions(user_id, plan, status, renews_at, updated_at)
-            VALUES (?, ?, 'active', ?, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, 'active', %s, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id) DO UPDATE SET
                 plan = excluded.plan,
                 status = 'active',
@@ -77,7 +77,7 @@ def get_subscription(current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM subscriptions WHERE user_id = ?", (current_user["id"],))
+        cursor.execute("SELECT * FROM subscriptions WHERE user_id = %s", (current_user["id"],))
         row = cursor.fetchone()
     finally:
         conn.close()
@@ -92,10 +92,10 @@ def create_notification(payload: NotificationInput, current_user: dict = Depends
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO notifications(user_id, channel, message, status, send_at) VALUES (?, ?, ?, 'pending', ?)",
+            "INSERT INTO notifications(user_id, channel, message, status, send_at) VALUES (%s, %s, %s, 'pending', %s) RETURNING id",
             (current_user["id"], payload.channel, payload.message, payload.send_at),
         )
-        notification_id = cursor.lastrowid
+        notification_id = cursor.fetchone()["id"]
         conn.commit()
     finally:
         conn.close()
@@ -107,7 +107,7 @@ def list_notifications(current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC", (current_user["id"],))
+        cursor.execute("SELECT * FROM notifications WHERE user_id = %s ORDER BY id DESC", (current_user["id"],))
         rows = [dict(r) for r in cursor.fetchall()]
     finally:
         conn.close()
@@ -120,7 +120,7 @@ def send_notification(notification_id: int, current_user: dict = Depends(get_cur
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE notifications SET status = 'sent' WHERE id = ? AND user_id = ?",
+            "UPDATE notifications SET status = 'sent' WHERE id = %s AND user_id = %s",
             (notification_id, current_user["id"]),
         )
         conn.commit()

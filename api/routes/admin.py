@@ -25,7 +25,7 @@ def log_audit_action(admin_user: dict, action: str, target_type: str, target_id:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO audit_logs (admin_user_id, admin_username, action, target_type, target_id, details, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO audit_logs (admin_user_id, admin_username, action, target_type, target_id, details, ip_address) VALUES (%s, %s, %s, %s, %s, %s, %s)",
             (admin_user.get("id"), admin_user.get("username", ""), action, target_type, str(target_id) if target_id else "", details, ip_address)
         )
         conn.commit()
@@ -64,7 +64,7 @@ def get_admin_users(
                    pdf_name
             FROM user_data
             ORDER BY ID DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
             """,
             (limit, offset),
         )
@@ -89,7 +89,7 @@ def get_admin_user_detail(analysis_id: int, current_admin: dict = Depends(get_cu
                    target_role, missing_skills, Actual_skills, Recommended_skills,
                    pdf_name, analysis_data
             FROM user_data
-            WHERE ID = ?
+            WHERE ID = %s
             """,
             (analysis_id,),
         )
@@ -111,7 +111,7 @@ def get_admin_feedback(
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT ID, feed_name, feed_email, feed_score, comments, Timestamp FROM user_feedback ORDER BY ID DESC LIMIT ? OFFSET ?",
+            "SELECT ID, feed_name, feed_email, feed_score, comments, Timestamp FROM user_feedback ORDER BY ID DESC LIMIT %s OFFSET %s",
             (limit, offset),
         )
         rows = cursor.fetchall()
@@ -154,16 +154,16 @@ def delete_admin_user(user_id: int, current_admin: dict = Depends(get_current_ad
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM user_data WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM user_profiles WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM shared_reports WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM login_attempts WHERE username = (SELECT username FROM users WHERE id = ?)", (user_id,))
-        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        cursor.execute("DELETE FROM user_data WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM user_profiles WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM user_preferences WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM subscriptions WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM shared_reports WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM login_attempts WHERE username = (SELECT username FROM users WHERE id = %s)", (user_id,))
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -176,7 +176,7 @@ def delete_admin_feedback(feedback_id: int, current_admin: dict = Depends(get_cu
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM user_feedback WHERE ID = ?", (feedback_id,))
+        cursor.execute("DELETE FROM user_feedback WHERE ID = %s", (feedback_id,))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -196,7 +196,7 @@ def get_registered_users(
         if q:
             like = f"%{q}%"
             cursor.execute(
-                "SELECT id, username, email, role, is_active FROM users WHERE username LIKE ? OR email LIKE ? ORDER BY id DESC",
+                "SELECT id, username, email, role, is_active FROM users WHERE username LIKE %s OR email LIKE %s ORDER BY id DESC",
                 (like, like),
             )
         else:
@@ -217,7 +217,7 @@ def update_user_role(user_id: int, body: RoleUpdate, current_admin: dict = Depen
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, role FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -225,10 +225,10 @@ def update_user_role(user_id: int, body: RoleUpdate, current_admin: dict = Depen
             cursor.execute("SELECT COUNT(*) as cnt FROM users WHERE role = 'admin'")
             if cursor.fetchone()["cnt"] <= 1:
                 raise HTTPException(status_code=400, detail="Cannot remove the last admin")
-        cursor.execute("UPDATE users SET role = ? WHERE id = ?", (body.role, user_id))
+        cursor.execute("UPDATE users SET role = %s WHERE id = %s", (body.role, user_id))
         conn.commit()
         invalidate_all_caches()
-        cursor.execute("SELECT id, username, email, role, is_active FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, username, email, role, is_active FROM users WHERE id = %s", (user_id,))
         updated = cursor.fetchone()
     finally:
         conn.close()
@@ -246,13 +246,13 @@ def update_user_status(user_id: int, body: StatusUpdate, current_admin: dict = D
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="User not found")
-        cursor.execute("UPDATE users SET is_active = ? WHERE id = ?", (1 if body.is_active else 0, user_id))
+        cursor.execute("UPDATE users SET is_active = %s WHERE id = %s", (1 if body.is_active else 0, user_id))
         conn.commit()
         invalidate_all_caches()
-        cursor.execute("SELECT id, username, email, role, is_active FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, username, email, role, is_active FROM users WHERE id = %s", (user_id,))
         updated = cursor.fetchone()
     finally:
         conn.close()
@@ -267,7 +267,7 @@ def delete_registered_user(user_id: int, current_admin: dict = Depends(get_curre
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT role FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         if user and user["role"] == "admin":
             cursor.execute("SELECT COUNT(*) as admin_count FROM users WHERE role = 'admin'")
@@ -280,16 +280,16 @@ def delete_registered_user(user_id: int, current_admin: dict = Depends(get_curre
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM user_data WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM user_profiles WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM shared_reports WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM login_attempts WHERE username = (SELECT username FROM users WHERE id = ?)", (user_id,))
-        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        cursor.execute("DELETE FROM user_data WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM user_profiles WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM user_preferences WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM subscriptions WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM shared_reports WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM login_attempts WHERE username = (SELECT username FROM users WHERE id = %s)", (user_id,))
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -318,7 +318,7 @@ def add_course(course: CourseInput, current_admin: dict = Depends(get_current_ad
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO courses (field, course_name, course_url) VALUES (?, ?, ?)",
+            "INSERT INTO courses (field, course_name, course_url) VALUES (%s, %s, %s)",
             (course.field, course.course_name, course.course_url)
         )
         conn.commit()
@@ -333,7 +333,7 @@ def delete_course(course_id: int, current_admin: dict = Depends(get_current_admi
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM courses WHERE id = ?", (course_id,))
+        cursor.execute("DELETE FROM courses WHERE id = %s", (course_id,))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -346,16 +346,16 @@ def update_course(course_id: int, course: CourseInput, current_admin: dict = Dep
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM courses WHERE id = ?", (course_id,))
+        cursor.execute("SELECT id FROM courses WHERE id = %s", (course_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Course not found")
         cursor.execute(
-            "UPDATE courses SET field = ?, course_name = ?, course_url = ? WHERE id = ?",
+            "UPDATE courses SET field = %s, course_name = %s, course_url = %s WHERE id = %s",
             (course.field, course.course_name, course.course_url, course_id)
         )
         conn.commit()
         invalidate_all_caches()
-        cursor.execute("SELECT id, field, course_name, course_url, created_at FROM courses WHERE id = ?", (course_id,))
+        cursor.execute("SELECT id, field, course_name, course_url, created_at FROM courses WHERE id = %s", (course_id,))
         updated = cursor.fetchone()
     finally:
         conn.close()
@@ -389,17 +389,17 @@ def scrape_courses(body: ScrapeRequest, current_admin: dict = Depends(get_curren
                 updated = 0
                 for course in courses:
                     # Check if course already exists by URL
-                    cursor.execute("SELECT id FROM courses WHERE course_url = ?", (course["course_url"],))
+                    cursor.execute("SELECT id FROM courses WHERE course_url = %s", (course["course_url"],))
                     existing = cursor.fetchone()
 
                     if existing:
                         # Update existing course
                         cursor.execute(
                             """UPDATE courses SET
-                            course_name = ?, description = ?, instructor = ?,
-                            rating = ?, duration = ?, price = ?, platform = ?,
-                            enrollment_count = ?, last_scraped = CURRENT_TIMESTAMP
-                            WHERE course_url = ?""",
+                            course_name = %s, description = %s, instructor = %s,
+                            rating = %s, duration = %s, price = %s, platform = %s,
+                            enrollment_count = %s, last_scraped = CURRENT_TIMESTAMP
+                            WHERE course_url = %s""",
                             (
                                 course["course_name"], course["description"],
                                 course["instructor"], course["rating"],
@@ -415,7 +415,7 @@ def scrape_courses(body: ScrapeRequest, current_admin: dict = Depends(get_curren
                             """INSERT INTO courses
                             (field, course_name, course_url, description, instructor,
                             rating, duration, price, platform, enrollment_count, last_scraped)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)""",
                             (
                                 field, course["course_name"], course["course_url"],
                                 course["description"], course["instructor"],
@@ -619,7 +619,7 @@ def get_analysis_cache(
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT content_hash, target_role, created_at, expires_at FROM analysis_cache ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT content_hash, target_role, created_at, expires_at FROM analysis_cache ORDER BY created_at DESC LIMIT %s OFFSET %s",
             (limit, offset),
         )
         rows = cursor.fetchall()
@@ -636,7 +636,7 @@ def delete_analysis_cache(content_hash: str, target_role: str, current_admin: di
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM analysis_cache WHERE content_hash = ? AND target_role = ?", (content_hash, target_role))
+        cursor.execute("DELETE FROM analysis_cache WHERE content_hash = %s AND target_role = %s", (content_hash, target_role))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -680,9 +680,9 @@ def get_job_roles(current_admin: dict = Depends(get_current_admin)):
         result = []
         for role in roles:
             role_dict = dict(role)
-            cursor.execute("SELECT id, skill_name, is_required FROM job_role_skills WHERE job_role_id = ?", (role["id"],))
+            cursor.execute("SELECT id, skill_name, is_required FROM job_role_skills WHERE job_role_id = %s", (role["id"],))
             role_dict["skills"] = [dict(s) for s in cursor.fetchall()]
-            cursor.execute("SELECT COUNT(*) as count FROM career_roadmaps WHERE job_role_id = ?", (role["id"],))
+            cursor.execute("SELECT COUNT(*) as count FROM career_roadmaps WHERE job_role_id = %s", (role["id"],))
             role_dict["roadmap_count"] = cursor.fetchone()["count"]
             result.append(role_dict)
     finally:
@@ -696,20 +696,20 @@ def create_job_role(body: JobRoleInput, current_admin: dict = Depends(get_curren
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO job_roles (title, description, category) VALUES (?, ?, ?)",
+            "INSERT INTO job_roles (title, description, category) VALUES (%s, %s, %s) RETURNING id",
             (body.title, body.description, body.category)
         )
-        role_id = cursor.lastrowid
+        role_id = cursor.fetchone()["id"]
         for skill in body.skills:
             cursor.execute(
-                "INSERT INTO job_role_skills (job_role_id, skill_name, is_required) VALUES (?, ?, 1)",
+                "INSERT INTO job_role_skills (job_role_id, skill_name, is_required) VALUES (%s, %s, 1)",
                 (role_id, skill)
             )
         conn.commit()
         invalidate_all_caches()
-        cursor.execute("SELECT id, title, description, category, is_active, created_at FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id, title, description, category, is_active, created_at FROM job_roles WHERE id = %s", (role_id,))
         role = dict(cursor.fetchone())
-        cursor.execute("SELECT id, skill_name, is_required FROM job_role_skills WHERE job_role_id = ?", (role_id,))
+        cursor.execute("SELECT id, skill_name, is_required FROM job_role_skills WHERE job_role_id = %s", (role_id,))
         role["skills"] = [dict(s) for s in cursor.fetchall()]
         role["roadmap_count"] = 0
     finally:
@@ -722,26 +722,26 @@ def update_job_role(role_id: int, body: JobRoleInput, current_admin: dict = Depe
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id FROM job_roles WHERE id = %s", (role_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Job role not found")
         cursor.execute(
-            "UPDATE job_roles SET title = ?, description = ?, category = ? WHERE id = ?",
+            "UPDATE job_roles SET title = %s, description = %s, category = %s WHERE id = %s",
             (body.title, body.description, body.category, role_id)
         )
-        cursor.execute("DELETE FROM job_role_skills WHERE job_role_id = ?", (role_id,))
+        cursor.execute("DELETE FROM job_role_skills WHERE job_role_id = %s", (role_id,))
         for skill in body.skills:
             cursor.execute(
-                "INSERT INTO job_role_skills (job_role_id, skill_name, is_required) VALUES (?, ?, 1)",
+                "INSERT INTO job_role_skills (job_role_id, skill_name, is_required) VALUES (%s, %s, 1)",
                 (role_id, skill)
             )
         conn.commit()
         invalidate_all_caches()
-        cursor.execute("SELECT id, title, description, category, is_active, created_at FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id, title, description, category, is_active, created_at FROM job_roles WHERE id = %s", (role_id,))
         role = dict(cursor.fetchone())
-        cursor.execute("SELECT id, skill_name, is_required FROM job_role_skills WHERE job_role_id = ?", (role_id,))
+        cursor.execute("SELECT id, skill_name, is_required FROM job_role_skills WHERE job_role_id = %s", (role_id,))
         role["skills"] = [dict(s) for s in cursor.fetchall()]
-        cursor.execute("SELECT COUNT(*) as count FROM career_roadmaps WHERE job_role_id = ?", (role_id,))
+        cursor.execute("SELECT COUNT(*) as count FROM career_roadmaps WHERE job_role_id = %s", (role_id,))
         role["roadmap_count"] = cursor.fetchone()["count"]
     finally:
         conn.close()
@@ -753,12 +753,12 @@ def toggle_job_role_status(role_id: int, current_admin: dict = Depends(get_curre
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, is_active FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id, is_active FROM job_roles WHERE id = %s", (role_id,))
         role = cursor.fetchone()
         if not role:
             raise HTTPException(status_code=404, detail="Job role not found")
         new_status = 0 if role["is_active"] else 1
-        cursor.execute("UPDATE job_roles SET is_active = ? WHERE id = ?", (new_status, role_id))
+        cursor.execute("UPDATE job_roles SET is_active = %s WHERE id = %s", (new_status, role_id))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -771,10 +771,10 @@ def delete_job_role(role_id: int, current_admin: dict = Depends(get_current_admi
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id FROM job_roles WHERE id = %s", (role_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Job role not found")
-        cursor.execute("DELETE FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("DELETE FROM job_roles WHERE id = %s", (role_id,))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -801,18 +801,18 @@ def get_roadmaps(role_id: int, current_admin: dict = Depends(get_current_admin))
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id FROM job_roles WHERE id = %s", (role_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Job role not found")
         cursor.execute(
-            "SELECT id, job_role_id, title, description, duration_weeks, sort_order, created_at FROM career_roadmaps WHERE job_role_id = ? ORDER BY sort_order",
+            "SELECT id, job_role_id, title, description, duration_weeks, sort_order, created_at FROM career_roadmaps WHERE job_role_id = %s ORDER BY sort_order",
             (role_id,)
         )
         roadmaps = []
         for rm in cursor.fetchall():
             rm_dict = dict(rm)
             cursor.execute(
-                "SELECT id, step_number, title, description, duration_weeks, skills, resources FROM roadmap_steps WHERE roadmap_id = ? ORDER BY step_number",
+                "SELECT id, step_number, title, description, duration_weeks, skills, resources FROM roadmap_steps WHERE roadmap_id = %s ORDER BY step_number",
                 (rm["id"],)
             )
             rm_dict["steps"] = [dict(s) for s in cursor.fetchall()]
@@ -827,27 +827,27 @@ def create_roadmap(role_id: int, body: RoadmapInput, current_admin: dict = Depen
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id FROM job_roles WHERE id = %s", (role_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Job role not found")
-        cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM career_roadmaps WHERE job_role_id = ?", (role_id,))
+        cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM career_roadmaps WHERE job_role_id = %s", (role_id,))
         _row = cursor.fetchone()
-        next_order = _row[0] if _row else 1
+        next_order = _row["next_order"] if _row else 1
         cursor.execute(
-            "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (%s, %s, %s, %s, %s) RETURNING id",
             (role_id, body.title, body.description, body.duration_weeks, next_order)
         )
-        roadmap_id = cursor.lastrowid
+        roadmap_id = cursor.fetchone()["id"]
         for i, step in enumerate(body.steps, 1):
             cursor.execute(
-                "INSERT INTO roadmap_steps (roadmap_id, step_number, title, description, duration_weeks, skills, resources) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO roadmap_steps (roadmap_id, step_number, title, description, duration_weeks, skills, resources) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (roadmap_id, i, step.get("title", ""), step.get("description", ""), step.get("duration_weeks", 2), step.get("skills", ""), step.get("resources", ""))
             )
         conn.commit()
         invalidate_all_caches()
-        cursor.execute("SELECT id, job_role_id, title, description, duration_weeks, sort_order, created_at FROM career_roadmaps WHERE id = ?", (roadmap_id,))
+        cursor.execute("SELECT id, job_role_id, title, description, duration_weeks, sort_order, created_at FROM career_roadmaps WHERE id = %s", (roadmap_id,))
         rm = dict(cursor.fetchone())
-        cursor.execute("SELECT id, step_number, title, description, duration_weeks, skills, resources FROM roadmap_steps WHERE roadmap_id = ? ORDER BY step_number", (roadmap_id,))
+        cursor.execute("SELECT id, step_number, title, description, duration_weeks, skills, resources FROM roadmap_steps WHERE roadmap_id = %s ORDER BY step_number", (roadmap_id,))
         rm["steps"] = [dict(s) for s in cursor.fetchall()]
     finally:
         conn.close()
@@ -859,7 +859,7 @@ def delete_roadmap(roadmap_id: int, current_admin: dict = Depends(get_current_ad
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM career_roadmaps WHERE id = ?", (roadmap_id,))
+        cursor.execute("DELETE FROM career_roadmaps WHERE id = %s", (roadmap_id,))
         conn.commit()
         invalidate_all_caches()
     finally:
@@ -874,13 +874,13 @@ ROADMAP_TEMPLATES = {
             "description": "Comprehensive path from fundamentals to system design",
             "duration_weeks": 24,
             "steps": [
-                {"title": "Programming Fundamentals", "description": "Master core programming concepts", "duration_weeks": 4, "skills": "Python,OOP,Data Structures,Algorithms", "resources": "https://www.youtube.com/results?search_query=python+programming+fundamentals"},
-                {"title": "Version Control & Collaboration", "description": "Git workflows, branching strategies, code reviews", "duration_weeks": 2, "skills": "Git,GitHub,Pull Requests,Code Review", "resources": "https://www.youtube.com/results?search_query=git+tutorial"},
-                {"title": "Testing & Quality Assurance", "description": "Write reliable, tested code with TDD", "duration_weeks": 3, "skills": "Unit Testing,Integration Testing,TDD,Pytest", "resources": "https://www.youtube.com/results?search_query=software+testing"},
-                {"title": "APIs & Backend Basics", "description": "REST APIs, authentication, middleware", "duration_weeks": 4, "skills": "REST,HTTP,Authentication,JSON", "resources": "https://www.youtube.com/results?search_query=rest+api+tutorial"},
-                {"title": "Databases & SQL", "description": "Relational and NoSQL databases", "duration_weeks": 3, "skills": "SQL,PostgreSQL,MongoDB,ORM", "resources": "https://www.youtube.com/results?search_query=sql+tutorial"},
-                {"title": "System Design", "description": "Design scalable, distributed systems", "duration_weeks": 5, "skills": "Architecture,Microservices,Caching,Load Balancing", "resources": "https://www.youtube.com/results?search_query=system+design"},
-                {"title": "DevOps & Deployment", "description": "CI/CD, containers, cloud deployment", "duration_weeks": 3, "skills": "Docker,Kubernetes,CI/CD,AWS", "resources": "https://www.youtube.com/results?search_query=devops+tutorial"},
+                {"title": "Programming Fundamentals", "description": "Master core programming concepts", "duration_weeks": 4, "skills": "Python,OOP,Data Structures,Algorithms", "resources": "https://www.youtube.com/results%ssearch_query=python+programming+fundamentals"},
+                {"title": "Version Control & Collaboration", "description": "Git workflows, branching strategies, code reviews", "duration_weeks": 2, "skills": "Git,GitHub,Pull Requests,Code Review", "resources": "https://www.youtube.com/results%ssearch_query=git+tutorial"},
+                {"title": "Testing & Quality Assurance", "description": "Write reliable, tested code with TDD", "duration_weeks": 3, "skills": "Unit Testing,Integration Testing,TDD,Pytest", "resources": "https://www.youtube.com/results%ssearch_query=software+testing"},
+                {"title": "APIs & Backend Basics", "description": "REST APIs, authentication, middleware", "duration_weeks": 4, "skills": "REST,HTTP,Authentication,JSON", "resources": "https://www.youtube.com/results%ssearch_query=rest+api+tutorial"},
+                {"title": "Databases & SQL", "description": "Relational and NoSQL databases", "duration_weeks": 3, "skills": "SQL,PostgreSQL,MongoDB,ORM", "resources": "https://www.youtube.com/results%ssearch_query=sql+tutorial"},
+                {"title": "System Design", "description": "Design scalable, distributed systems", "duration_weeks": 5, "skills": "Architecture,Microservices,Caching,Load Balancing", "resources": "https://www.youtube.com/results%ssearch_query=system+design"},
+                {"title": "DevOps & Deployment", "description": "CI/CD, containers, cloud deployment", "duration_weeks": 3, "skills": "Docker,Kubernetes,CI/CD,AWS", "resources": "https://www.youtube.com/results%ssearch_query=devops+tutorial"},
             ]
         }
     ],
@@ -890,12 +890,12 @@ ROADMAP_TEMPLATES = {
             "description": "From HTML basics to React mastery",
             "duration_weeks": 20,
             "steps": [
-                {"title": "HTML & CSS Foundations", "description": "Semantic HTML, CSS Grid, Flexbox", "duration_weeks": 3, "skills": "HTML5,CSS3,Flexbox,Grid,Responsive Design", "resources": "https://www.youtube.com/results?search_query=html+css+tutorial"},
-                {"title": "JavaScript Essentials", "description": "ES6+, DOM manipulation, async/await", "duration_weeks": 4, "skills": "JavaScript,ES6+,DOM,Async/Await,Promises", "resources": "https://www.youtube.com/results?search_query=javascript+tutorial"},
-                {"title": "React & Components", "description": "Component architecture, hooks, state management", "duration_weeks": 5, "skills": "React,Hooks,Context API,State Management", "resources": "https://www.youtube.com/results?search_query=react+tutorial"},
-                {"title": "TypeScript", "description": "Type-safe JavaScript development", "duration_weeks": 3, "skills": "TypeScript,Generics,Interfaces,Types", "resources": "https://www.youtube.com/results?search_query=typescript+tutorial"},
-                {"title": "Testing Frontend Apps", "description": "Unit and integration testing", "duration_weeks": 2, "skills": "Jest,React Testing Library,Cypress", "resources": "https://www.youtube.com/results?search_query=frontend+testing"},
-                {"title": "Performance Optimization", "description": "Core Web Vitals, lazy loading, code splitting", "duration_weeks": 3, "skills": "Lighthouse,Webpack,Code Splitting,Optimization", "resources": "https://www.youtube.com/results?search_query=web+performance"},
+                {"title": "HTML & CSS Foundations", "description": "Semantic HTML, CSS Grid, Flexbox", "duration_weeks": 3, "skills": "HTML5,CSS3,Flexbox,Grid,Responsive Design", "resources": "https://www.youtube.com/results%ssearch_query=html+css+tutorial"},
+                {"title": "JavaScript Essentials", "description": "ES6+, DOM manipulation, async/await", "duration_weeks": 4, "skills": "JavaScript,ES6+,DOM,Async/Await,Promises", "resources": "https://www.youtube.com/results%ssearch_query=javascript+tutorial"},
+                {"title": "React & Components", "description": "Component architecture, hooks, state management", "duration_weeks": 5, "skills": "React,Hooks,Context API,State Management", "resources": "https://www.youtube.com/results%ssearch_query=react+tutorial"},
+                {"title": "TypeScript", "description": "Type-safe JavaScript development", "duration_weeks": 3, "skills": "TypeScript,Generics,Interfaces,Types", "resources": "https://www.youtube.com/results%ssearch_query=typescript+tutorial"},
+                {"title": "Testing Frontend Apps", "description": "Unit and integration testing", "duration_weeks": 2, "skills": "Jest,React Testing Library,Cypress", "resources": "https://www.youtube.com/results%ssearch_query=frontend+testing"},
+                {"title": "Performance Optimization", "description": "Core Web Vitals, lazy loading, code splitting", "duration_weeks": 3, "skills": "Lighthouse,Webpack,Code Splitting,Optimization", "resources": "https://www.youtube.com/results%ssearch_query=web+performance"},
             ]
         }
     ],
@@ -905,12 +905,12 @@ ROADMAP_TEMPLATES = {
             "description": "Build robust, scalable server-side applications",
             "duration_weeks": 22,
             "steps": [
-                {"title": "Language & Framework", "description": "Master a backend language (Python/Node.js/Go)", "duration_weeks": 4, "skills": "Python,Node.js,FastAPI,Express", "resources": "https://www.youtube.com/results?search_query=backend+programming"},
-                {"title": "Database Design", "description": "Schema design, indexing, query optimization", "duration_weeks": 4, "skills": "SQL,PostgreSQL,MongoDB,Indexing,ORM", "resources": "https://www.youtube.com/results?search_query=database+design"},
-                {"title": "RESTful API Design", "description": "API standards, versioning, documentation", "duration_weeks": 3, "skills": "REST,OpenAPI,GraphQL,Versioning", "resources": "https://www.youtube.com/results?search_query=rest+api+design"},
-                {"title": "Authentication & Security", "description": "JWT, OAuth, input validation, rate limiting", "duration_weeks": 3, "skills": "JWT,OAuth,Encryption,Rate Limiting", "resources": "https://www.youtube.com/results?search_query=api+security"},
-                {"title": "Caching & Performance", "description": "Redis, CDN, query optimization", "duration_weeks": 3, "skills": "Redis,CDN,Query Optimization,Connection Pooling", "resources": "https://www.youtube.com/results?search_query=caching+tutorial"},
-                {"title": "Containerization & Deployment", "description": "Docker, cloud services, monitoring", "duration_weeks": 5, "skills": "Docker,AWS,GCP,Monitoring,Logging", "resources": "https://www.youtube.com/results?search_query=docker+deployment"},
+                {"title": "Language & Framework", "description": "Master a backend language (Python/Node.js/Go)", "duration_weeks": 4, "skills": "Python,Node.js,FastAPI,Express", "resources": "https://www.youtube.com/results%ssearch_query=backend+programming"},
+                {"title": "Database Design", "description": "Schema design, indexing, query optimization", "duration_weeks": 4, "skills": "SQL,PostgreSQL,MongoDB,Indexing,ORM", "resources": "https://www.youtube.com/results%ssearch_query=database+design"},
+                {"title": "RESTful API Design", "description": "API standards, versioning, documentation", "duration_weeks": 3, "skills": "REST,OpenAPI,GraphQL,Versioning", "resources": "https://www.youtube.com/results%ssearch_query=rest+api+design"},
+                {"title": "Authentication & Security", "description": "JWT, OAuth, input validation, rate limiting", "duration_weeks": 3, "skills": "JWT,OAuth,Encryption,Rate Limiting", "resources": "https://www.youtube.com/results%ssearch_query=api+security"},
+                {"title": "Caching & Performance", "description": "Redis, CDN, query optimization", "duration_weeks": 3, "skills": "Redis,CDN,Query Optimization,Connection Pooling", "resources": "https://www.youtube.com/results%ssearch_query=caching+tutorial"},
+                {"title": "Containerization & Deployment", "description": "Docker, cloud services, monitoring", "duration_weeks": 5, "skills": "Docker,AWS,GCP,Monitoring,Logging", "resources": "https://www.youtube.com/results%ssearch_query=docker+deployment"},
             ]
         }
     ],
@@ -920,12 +920,12 @@ ROADMAP_TEMPLATES = {
             "description": "From data analysis to machine learning",
             "duration_weeks": 26,
             "steps": [
-                {"title": "Python for Data", "description": "NumPy, Pandas, data manipulation", "duration_weeks": 4, "skills": "Python,NumPy,Pandas,Data Cleaning", "resources": "https://www.youtube.com/results?search_query=python+data+science"},
-                {"title": "Statistics & Probability", "description": "Statistical concepts for analysis", "duration_weeks": 4, "skills": "Statistics,Probability,Hypothesis Testing,Distributions", "resources": "https://www.youtube.com/results?search_query=statistics+data+science"},
-                {"title": "Data Visualization", "description": "Matplotlib, Seaborn, Plotly", "duration_weeks": 3, "skills": "Matplotlib,Seaborn,Plotly,Tableau", "resources": "https://www.youtube.com/results?search_query=data+visualization"},
-                {"title": "Machine Learning", "description": "Supervised and unsupervised learning", "duration_weeks": 6, "skills": "Scikit-learn,Regression,Classification,Clustering", "resources": "https://www.youtube.com/results?search_query=machine+learning+tutorial"},
-                {"title": "Deep Learning", "description": "Neural networks, CNNs, RNNs", "duration_weeks": 5, "skills": "TensorFlow,PyTorch,Neural Networks,CNN", "resources": "https://www.youtube.com/results?search_query=deep+learning+tutorial"},
-                {"title": "MLOps & Deployment", "description": "Model deployment, monitoring, A/B testing", "duration_weeks": 4, "skills": "MLflow,Docker,API Integration,Monitoring", "resources": "https://www.youtube.com/results?search_query=mlops+tutorial"},
+                {"title": "Python for Data", "description": "NumPy, Pandas, data manipulation", "duration_weeks": 4, "skills": "Python,NumPy,Pandas,Data Cleaning", "resources": "https://www.youtube.com/results%ssearch_query=python+data+science"},
+                {"title": "Statistics & Probability", "description": "Statistical concepts for analysis", "duration_weeks": 4, "skills": "Statistics,Probability,Hypothesis Testing,Distributions", "resources": "https://www.youtube.com/results%ssearch_query=statistics+data+science"},
+                {"title": "Data Visualization", "description": "Matplotlib, Seaborn, Plotly", "duration_weeks": 3, "skills": "Matplotlib,Seaborn,Plotly,Tableau", "resources": "https://www.youtube.com/results%ssearch_query=data+visualization"},
+                {"title": "Machine Learning", "description": "Supervised and unsupervised learning", "duration_weeks": 6, "skills": "Scikit-learn,Regression,Classification,Clustering", "resources": "https://www.youtube.com/results%ssearch_query=machine+learning+tutorial"},
+                {"title": "Deep Learning", "description": "Neural networks, CNNs, RNNs", "duration_weeks": 5, "skills": "TensorFlow,PyTorch,Neural Networks,CNN", "resources": "https://www.youtube.com/results%ssearch_query=deep+learning+tutorial"},
+                {"title": "MLOps & Deployment", "description": "Model deployment, monitoring, A/B testing", "duration_weeks": 4, "skills": "MLflow,Docker,API Integration,Monitoring", "resources": "https://www.youtube.com/results%ssearch_query=mlops+tutorial"},
             ]
         }
     ],
@@ -935,12 +935,12 @@ ROADMAP_TEMPLATES = {
             "description": "Master infrastructure automation and deployment",
             "duration_weeks": 24,
             "steps": [
-                {"title": "Linux & Networking", "description": "OS fundamentals, networking protocols", "duration_weeks": 4, "skills": "Linux,Bash,TCP/IP,DNS,HTTP", "resources": "https://www.youtube.com/results?search_query=linux+tutorial"},
-                {"title": "Scripting & Automation", "description": "Python/Bash scripting for automation", "duration_weeks": 3, "skills": "Python,Bash,Ansible,Automation", "resources": "https://www.youtube.com/results?search_query=devops+scripting"},
-                {"title": "Containers", "description": "Docker, container orchestration", "duration_weeks": 4, "skills": "Docker,Docker Compose,Containerization", "resources": "https://www.youtube.com/results?search_query=docker+tutorial"},
-                {"title": "Kubernetes", "description": "Container orchestration at scale", "duration_weeks": 5, "skills": "Kubernetes,Helm,Pods,Services,Ingress", "resources": "https://www.youtube.com/results?search_query=kubernetes+tutorial"},
-                {"title": "CI/CD Pipelines", "description": "Automated testing and deployment", "duration_weeks": 4, "skills": "GitHub Actions,Jenkins,GitLab CI,Pipelines", "resources": "https://www.youtube.com/results?search_query=ci+cd+tutorial"},
-                {"title": "Cloud Platforms", "description": "AWS/Azure/GCP services and architecture", "duration_weeks": 4, "skills": "AWS,Azure,GCP,Terraform,IaC", "resources": "https://www.youtube.com/results?search_query=aws+cloud+tutorial"},
+                {"title": "Linux & Networking", "description": "OS fundamentals, networking protocols", "duration_weeks": 4, "skills": "Linux,Bash,TCP/IP,DNS,HTTP", "resources": "https://www.youtube.com/results%ssearch_query=linux+tutorial"},
+                {"title": "Scripting & Automation", "description": "Python/Bash scripting for automation", "duration_weeks": 3, "skills": "Python,Bash,Ansible,Automation", "resources": "https://www.youtube.com/results%ssearch_query=devops+scripting"},
+                {"title": "Containers", "description": "Docker, container orchestration", "duration_weeks": 4, "skills": "Docker,Docker Compose,Containerization", "resources": "https://www.youtube.com/results%ssearch_query=docker+tutorial"},
+                {"title": "Kubernetes", "description": "Container orchestration at scale", "duration_weeks": 5, "skills": "Kubernetes,Helm,Pods,Services,Ingress", "resources": "https://www.youtube.com/results%ssearch_query=kubernetes+tutorial"},
+                {"title": "CI/CD Pipelines", "description": "Automated testing and deployment", "duration_weeks": 4, "skills": "GitHub Actions,Jenkins,GitLab CI,Pipelines", "resources": "https://www.youtube.com/results%ssearch_query=ci+cd+tutorial"},
+                {"title": "Cloud Platforms", "description": "AWS/Azure/GCP services and architecture", "duration_weeks": 4, "skills": "AWS,Azure,GCP,Terraform,IaC", "resources": "https://www.youtube.com/results%ssearch_query=aws+cloud+tutorial"},
             ]
         }
     ],
@@ -950,12 +950,12 @@ ROADMAP_TEMPLATES = {
             "description": "Build cross-platform mobile applications",
             "duration_weeks": 22,
             "steps": [
-                {"title": "Mobile Fundamentals", "description": "App architecture, lifecycle, UI principles", "duration_weeks": 3, "skills": "Mobile UX,App Architecture,State Management", "resources": "https://www.youtube.com/results?search_query=mobile+development+basics"},
-                {"title": "Cross-Platform Framework", "description": "React Native or Flutter", "duration_weeks": 6, "skills": "React Native,Flutter,Dart,Components", "resources": "https://www.youtube.com/results?search_query=react+native+tutorial"},
-                {"title": "Backend Integration", "description": "APIs, authentication, local storage", "duration_weeks": 4, "skills": "REST APIs,Firebase,JWT,AsyncStorage", "resources": "https://www.youtube.com/results?search_query=mobile+backend+integration"},
-                {"title": "UI/UX & Navigation", "description": "Polished interfaces and navigation patterns", "duration_weeks": 3, "skills": "React Navigation,Animations,Gestures", "resources": "https://www.youtube.com/results?search_query=mobile+ui+design"},
-                {"title": "Testing & Debugging", "description": "Unit tests, integration tests, debugging tools", "duration_weeks": 3, "skills": "Jest,Detox,Flipper,Debugging", "resources": "https://www.youtube.com/results?search_query=mobile+testing"},
-                {"title": "Publishing & Maintenance", "description": "App Store, Play Store, analytics", "duration_weeks": 3, "skills": "App Store,Play Store,Analytics,Beta Testing", "resources": "https://www.youtube.com/results?search_query=app+store+publishing"},
+                {"title": "Mobile Fundamentals", "description": "App architecture, lifecycle, UI principles", "duration_weeks": 3, "skills": "Mobile UX,App Architecture,State Management", "resources": "https://www.youtube.com/results%ssearch_query=mobile+development+basics"},
+                {"title": "Cross-Platform Framework", "description": "React Native or Flutter", "duration_weeks": 6, "skills": "React Native,Flutter,Dart,Components", "resources": "https://www.youtube.com/results%ssearch_query=react+native+tutorial"},
+                {"title": "Backend Integration", "description": "APIs, authentication, local storage", "duration_weeks": 4, "skills": "REST APIs,Firebase,JWT,AsyncStorage", "resources": "https://www.youtube.com/results%ssearch_query=mobile+backend+integration"},
+                {"title": "UI/UX & Navigation", "description": "Polished interfaces and navigation patterns", "duration_weeks": 3, "skills": "React Navigation,Animations,Gestures", "resources": "https://www.youtube.com/results%ssearch_query=mobile+ui+design"},
+                {"title": "Testing & Debugging", "description": "Unit tests, integration tests, debugging tools", "duration_weeks": 3, "skills": "Jest,Detox,Flipper,Debugging", "resources": "https://www.youtube.com/results%ssearch_query=mobile+testing"},
+                {"title": "Publishing & Maintenance", "description": "App Store, Play Store, analytics", "duration_weeks": 3, "skills": "App Store,Play Store,Analytics,Beta Testing", "resources": "https://www.youtube.com/results%ssearch_query=app+store+publishing"},
             ]
         }
     ],
@@ -965,13 +965,13 @@ ROADMAP_TEMPLATES = {
             "description": "Master both frontend and backend development",
             "duration_weeks": 28,
             "steps": [
-                {"title": "Frontend Foundations", "description": "HTML, CSS, JavaScript, React", "duration_weeks": 5, "skills": "HTML,CSS,JavaScript,React,Responsive Design", "resources": "https://www.youtube.com/results?search_query=frontend+web+development"},
-                {"title": "Backend Foundations", "description": "Node.js, Express, server-side logic", "duration_weeks": 4, "skills": "Node.js,Express,REST APIs,Middleware", "resources": "https://www.youtube.com/results?search_query=nodejs+backend+tutorial"},
-                {"title": "Database Design", "description": "SQL, MongoDB, data modeling", "duration_weeks": 4, "skills": "SQL,MongoDB,Schema Design,Queries", "resources": "https://www.youtube.com/results?search_query=database+tutorial"},
-                {"title": "Authentication & Security", "description": "JWT, sessions, security best practices", "duration_weeks": 3, "skills": "JWT,Sessions,OAuth,Security", "resources": "https://www.youtube.com/results?search_query=authentication+tutorial"},
-                {"title": "Full Stack Integration", "description": "Connect frontend and backend", "duration_weeks": 5, "skills": "API Integration,State Management,Error Handling", "resources": "https://www.youtube.com/results?search_query=full+stack+integration"},
-                {"title": "Testing & Deployment", "description": "End-to-end testing, CI/CD, hosting", "duration_weeks": 4, "skills": "Jest,Cypress,Docker,Deployment", "resources": "https://www.youtube.com/results?search_query=full+stack+deployment"},
-                {"title": "Advanced Topics", "description": "WebSockets, real-time, performance", "duration_weeks": 3, "skills": "WebSockets,Real-time,Caching,Performance", "resources": "https://www.youtube.com/results?search_query=advanced+web+development"},
+                {"title": "Frontend Foundations", "description": "HTML, CSS, JavaScript, React", "duration_weeks": 5, "skills": "HTML,CSS,JavaScript,React,Responsive Design", "resources": "https://www.youtube.com/results%ssearch_query=frontend+web+development"},
+                {"title": "Backend Foundations", "description": "Node.js, Express, server-side logic", "duration_weeks": 4, "skills": "Node.js,Express,REST APIs,Middleware", "resources": "https://www.youtube.com/results%ssearch_query=nodejs+backend+tutorial"},
+                {"title": "Database Design", "description": "SQL, MongoDB, data modeling", "duration_weeks": 4, "skills": "SQL,MongoDB,Schema Design,Queries", "resources": "https://www.youtube.com/results%ssearch_query=database+tutorial"},
+                {"title": "Authentication & Security", "description": "JWT, sessions, security best practices", "duration_weeks": 3, "skills": "JWT,Sessions,OAuth,Security", "resources": "https://www.youtube.com/results%ssearch_query=authentication+tutorial"},
+                {"title": "Full Stack Integration", "description": "Connect frontend and backend", "duration_weeks": 5, "skills": "API Integration,State Management,Error Handling", "resources": "https://www.youtube.com/results%ssearch_query=full+stack+integration"},
+                {"title": "Testing & Deployment", "description": "End-to-end testing, CI/CD, hosting", "duration_weeks": 4, "skills": "Jest,Cypress,Docker,Deployment", "resources": "https://www.youtube.com/results%ssearch_query=full+stack+deployment"},
+                {"title": "Advanced Topics", "description": "WebSockets, real-time, performance", "duration_weeks": 3, "skills": "WebSockets,Real-time,Caching,Performance", "resources": "https://www.youtube.com/results%ssearch_query=advanced+web+development"},
             ]
         }
     ],
@@ -981,12 +981,12 @@ ROADMAP_TEMPLATES = {
             "description": "Protect systems from security threats",
             "duration_weeks": 26,
             "steps": [
-                {"title": "Networking Fundamentals", "description": "TCP/IP, protocols, network security", "duration_weeks": 4, "skills": "TCP/IP,HTTP,DNS,Firewalls,VPN", "resources": "https://www.youtube.com/results?search_query=network+security+tutorial"},
-                {"title": "Operating Systems Security", "description": "Linux and Windows hardening", "duration_weeks": 4, "skills": "Linux,Windows,Hardening,Permissions", "resources": "https://www.youtube.com/results?search_query=linux+security"},
-                {"title": "Security Tools", "description": "SIEM, vulnerability scanners, packet analyzers", "duration_weeks": 4, "skills": "SIEM,Nmap,Wireshark,MetaSploit", "resources": "https://www.youtube.com/results?search_query=security+tools"},
-                {"title": "Ethical Hacking", "description": "Penetration testing methodologies", "duration_weeks": 5, "skills": "Kali Linux,Penetration Testing,Exploits,Recon", "resources": "https://www.youtube.com/results?search_query=ethical+hacking+tutorial"},
-                {"title": "Cryptography", "description": "Encryption, hashing, PKI", "duration_weeks": 4, "skills": "Encryption,Hashing,SSL/TLS,PKI", "resources": "https://www.youtube.com/results?search_query=cryptography+tutorial"},
-                {"title": "Incident Response", "description": "Detection, containment, recovery", "duration_weeks": 5, "skills": "Incident Response,Forensics,Compliance,Reporting", "resources": "https://www.youtube.com/results?search_query=incident+response"},
+                {"title": "Networking Fundamentals", "description": "TCP/IP, protocols, network security", "duration_weeks": 4, "skills": "TCP/IP,HTTP,DNS,Firewalls,VPN", "resources": "https://www.youtube.com/results%ssearch_query=network+security+tutorial"},
+                {"title": "Operating Systems Security", "description": "Linux and Windows hardening", "duration_weeks": 4, "skills": "Linux,Windows,Hardening,Permissions", "resources": "https://www.youtube.com/results%ssearch_query=linux+security"},
+                {"title": "Security Tools", "description": "SIEM, vulnerability scanners, packet analyzers", "duration_weeks": 4, "skills": "SIEM,Nmap,Wireshark,MetaSploit", "resources": "https://www.youtube.com/results%ssearch_query=security+tools"},
+                {"title": "Ethical Hacking", "description": "Penetration testing methodologies", "duration_weeks": 5, "skills": "Kali Linux,Penetration Testing,Exploits,Recon", "resources": "https://www.youtube.com/results%ssearch_query=ethical+hacking+tutorial"},
+                {"title": "Cryptography", "description": "Encryption, hashing, PKI", "duration_weeks": 4, "skills": "Encryption,Hashing,SSL/TLS,PKI", "resources": "https://www.youtube.com/results%ssearch_query=cryptography+tutorial"},
+                {"title": "Incident Response", "description": "Detection, containment, recovery", "duration_weeks": 5, "skills": "Incident Response,Forensics,Compliance,Reporting", "resources": "https://www.youtube.com/results%ssearch_query=incident+response"},
             ]
         }
     ],
@@ -1003,7 +1003,7 @@ def bulk_import_roadmap(role_id: int, body: BulkRoadmapImport, current_admin: di
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id FROM job_roles WHERE id = %s", (role_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Job role not found")
 
@@ -1031,24 +1031,24 @@ def bulk_import_roadmap(role_id: int, body: BulkRoadmapImport, current_admin: di
         if not steps:
             raise HTTPException(status_code=400, detail="No valid steps found. Use format: Title | Description | Weeks | Skills | Resources")
 
-        cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM career_roadmaps WHERE job_role_id = ?", (role_id,))
+        cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM career_roadmaps WHERE job_role_id = %s", (role_id,))
         _row = cursor.fetchone()
-        next_order = _row[0] if _row else 1
+        next_order = _row["next_order"] if _row else 1
         cursor.execute(
-            "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (%s, %s, %s, %s, %s) RETURNING id",
             (role_id, title, description, duration_weeks, next_order)
         )
-        roadmap_id = cursor.lastrowid
+        roadmap_id = cursor.fetchone()["id"]
         for i, step in enumerate(steps, 1):
             cursor.execute(
-                "INSERT INTO roadmap_steps (roadmap_id, step_number, title, description, duration_weeks, skills, resources) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO roadmap_steps (roadmap_id, step_number, title, description, duration_weeks, skills, resources) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (roadmap_id, i, step["title"], step["description"], step["duration_weeks"], step["skills"], step["resources"])
             )
         conn.commit()
         invalidate_all_caches()
-        cursor.execute("SELECT id, job_role_id, title, description, duration_weeks, sort_order, created_at FROM career_roadmaps WHERE id = ?", (roadmap_id,))
+        cursor.execute("SELECT id, job_role_id, title, description, duration_weeks, sort_order, created_at FROM career_roadmaps WHERE id = %s", (roadmap_id,))
         rm = dict(cursor.fetchone())
-        cursor.execute("SELECT id, step_number, title, description, duration_weeks, skills, resources FROM roadmap_steps WHERE roadmap_id = ? ORDER BY step_number", (roadmap_id,))
+        cursor.execute("SELECT id, step_number, title, description, duration_weeks, skills, resources FROM roadmap_steps WHERE roadmap_id = %s ORDER BY step_number", (roadmap_id,))
         rm["steps"] = [dict(s) for s in cursor.fetchall()]
     finally:
         conn.close()
@@ -1060,12 +1060,12 @@ def ai_generate_roadmap(role_id: int, current_admin: dict = Depends(get_current_
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, title, description FROM job_roles WHERE id = ?", (role_id,))
+        cursor.execute("SELECT id, title, description FROM job_roles WHERE id = %s", (role_id,))
         role = cursor.fetchone()
         if not role:
             raise HTTPException(status_code=404, detail="Job role not found")
 
-        cursor.execute("SELECT skill_name FROM job_role_skills WHERE job_role_id = ?", (role_id,))
+        cursor.execute("SELECT skill_name FROM job_role_skills WHERE job_role_id = %s", (role_id,))
         skills = [row['skill_name'] for row in cursor.fetchall()]
 
         role_title = role['title']
@@ -1082,24 +1082,24 @@ def ai_generate_roadmap(role_id: int, current_admin: dict = Depends(get_current_
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM career_roadmaps WHERE job_role_id = ?", (role_id,))
+        cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM career_roadmaps WHERE job_role_id = %s", (role_id,))
         _row = cursor.fetchone()
-        next_order = _row[0] if _row else 1
+        next_order = _row["next_order"] if _row else 1
         cursor.execute(
-            "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO career_roadmaps (job_role_id, title, description, duration_weeks, sort_order) VALUES (%s, %s, %s, %s, %s) RETURNING id",
             (role_id, roadmap_data.get("title", f"{role_title} Roadmap"), roadmap_data.get("description", ""), roadmap_data.get("duration_weeks", 16), next_order)
         )
-        roadmap_id = cursor.lastrowid
+        roadmap_id = cursor.fetchone()["id"]
         for i, step in enumerate(roadmap_data.get("steps", []), 1):
             cursor.execute(
-                "INSERT INTO roadmap_steps (roadmap_id, step_number, title, description, duration_weeks, skills, resources) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO roadmap_steps (roadmap_id, step_number, title, description, duration_weeks, skills, resources) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (roadmap_id, i, step.get("title", ""), step.get("description", ""), step.get("duration_weeks", 2), step.get("skills", ""), step.get("resources", ""))
             )
         conn.commit()
         invalidate_all_caches()
-        cursor.execute("SELECT id, job_role_id, title, description, duration_weeks, sort_order, created_at FROM career_roadmaps WHERE id = ?", (roadmap_id,))
+        cursor.execute("SELECT id, job_role_id, title, description, duration_weeks, sort_order, created_at FROM career_roadmaps WHERE id = %s", (roadmap_id,))
         rm = dict(cursor.fetchone())
-        cursor.execute("SELECT id, step_number, title, description, duration_weeks, skills, resources FROM roadmap_steps WHERE roadmap_id = ? ORDER BY step_number", (roadmap_id,))
+        cursor.execute("SELECT id, step_number, title, description, duration_weeks, skills, resources FROM roadmap_steps WHERE roadmap_id = %s ORDER BY step_number", (roadmap_id,))
         rm["steps"] = [dict(s) for s in cursor.fetchall()]
     finally:
         conn.close()
@@ -1117,7 +1117,7 @@ def get_audit_logs(
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, admin_username, action, target_type, target_id, details, ip_address, created_at FROM audit_logs ORDER BY id DESC LIMIT ? OFFSET ?",
+            "SELECT id, admin_username, action, target_type, target_id, details, ip_address, created_at FROM audit_logs ORDER BY id DESC LIMIT %s OFFSET %s",
             (limit, offset),
         )
         rows = cursor.fetchall()
@@ -1140,13 +1140,13 @@ def admin_reset_password(body: PasswordResetInput, current_admin: dict = Depends
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username FROM users WHERE id = ?", (body.user_id,))
+        cursor.execute("SELECT id, username FROM users WHERE id = %s", (body.user_id,))
         user = cursor.fetchone()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         hashed = get_password_hash(body.new_password)
-        cursor.execute("UPDATE users SET hashed_password = ? WHERE id = ?", (hashed, body.user_id))
-        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (body.user_id,))
+        cursor.execute("UPDATE users SET hashed_password = %s WHERE id = %s", (hashed, body.user_id))
+        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (body.user_id,))
         conn.commit()
     finally:
         conn.close()
@@ -1284,7 +1284,7 @@ def get_taxonomy_video_resources(
         cursor = conn.cursor()
         if video_type:
             cursor.execute(
-                "SELECT * FROM video_resources WHERE video_type = ? ORDER BY field_name, sort_order",
+                "SELECT * FROM video_resources WHERE video_type = %s ORDER BY field_name, sort_order",
                 (video_type,)
             )
         else:

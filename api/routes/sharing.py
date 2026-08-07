@@ -27,7 +27,7 @@ def create_share_link(payload: ShareReportRequest, current_user: dict = Depends(
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT 1 FROM user_data WHERE ID = ? AND user_id = ?",
+            "SELECT 1 FROM user_data WHERE ID = %s AND user_id = %s",
             (payload.analysis_id, current_user["id"]),
         )
         if cursor.fetchone() is None:
@@ -37,7 +37,7 @@ def create_share_link(payload: ShareReportRequest, current_user: dict = Depends(
         cursor.execute(
             """
             INSERT INTO shared_reports(token, user_id, analysis_id, expires_at, is_public)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             """,
             (token, current_user["id"], payload.analysis_id, expires_at, int(payload.is_public)),
         )
@@ -52,7 +52,7 @@ def get_shared_report(token: str, current_user: Optional[dict] = Depends(get_cur
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM shared_reports WHERE token = ?", (token,))
+        cursor.execute("SELECT * FROM shared_reports WHERE token = %s", (token,))
         share = cursor.fetchone()
         if not share:
             raise HTTPException(status_code=404, detail="Share link not found")
@@ -64,7 +64,7 @@ def get_shared_report(token: str, current_user: Optional[dict] = Depends(get_cur
             if not current_user or current_user["id"] != share["user_id"]:
                 raise HTTPException(status_code=403, detail="This is a private share link")
 
-        cursor.execute("SELECT analysis_data FROM user_data WHERE ID = ?", (share["analysis_id"],))
+        cursor.execute("SELECT analysis_data FROM user_data WHERE ID = %s", (share["analysis_id"],))
         row = cursor.fetchone()
     finally:
         conn.close()
@@ -84,7 +84,7 @@ def revoke_share_link(token: str, current_user: dict = Depends(get_current_user)
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT user_id FROM shared_reports WHERE token = ?",
+            "SELECT user_id FROM shared_reports WHERE token = %s",
             (token,),
         )
         share = cursor.fetchone()
@@ -92,7 +92,7 @@ def revoke_share_link(token: str, current_user: dict = Depends(get_current_user)
             raise HTTPException(status_code=404, detail="Share link not found")
         if share["user_id"] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Not authorized to revoke this link")
-        cursor.execute("DELETE FROM shared_reports WHERE token = ?", (token,))
+        cursor.execute("DELETE FROM shared_reports WHERE token = %s", (token,))
         conn.commit()
     finally:
         conn.close()
@@ -111,7 +111,7 @@ def get_my_shares(current_user: dict = Depends(get_current_user)):
                    sr.created_at, ud.pdf_name, ud.target_role
             FROM shared_reports sr
             JOIN user_data ud ON sr.analysis_id = ud.ID
-            WHERE sr.user_id = ?
+            WHERE sr.user_id = %s
             ORDER BY sr.created_at DESC
             """,
             (current_user["id"],),

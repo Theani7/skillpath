@@ -9,7 +9,7 @@ import time
 import uuid
 import logging
 
-from api.database import get_db_connection, get_db
+from api.database import get_db_connection
 from api.auth import client_ip
 from api.exceptions import SkillPathException
 from api.mock_interview import router as mock_interview_router
@@ -48,12 +48,9 @@ def _validate_env():
         else:
             warnings.append("JWT_SECRET_KEY is missing or short – using random key (sessions reset on restart).")
 
-    db_file = os.getenv("DB_FILE") or os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "cv.db"
-    )
-    db_dir = os.path.dirname(db_file) or "."
-    if not os.access(db_dir, os.W_OK):
-        errors.append(f"DB_FILE directory is not writable: {db_dir}")
+    database_url = os.getenv("DATABASE_URL", "")
+    if not database_url:
+        errors.append("DATABASE_URL is required. Example: postgresql://user:pass@localhost:5432/skillpath")
 
     cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
     if is_prod and "*" in cors_raw:
@@ -267,29 +264,33 @@ async def request_logging_and_rate_limit(request: Request, call_next):
     now_minute = int(time.time() // 60)
     bucket_key = f"{request_ip}:{now_minute}"
 
+    conn = None
     try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            # Periodic cleanup instead of per-request
-            now = int(time.time())
-            if now - _last_rate_limit_cleanup > RATE_LIMIT_CLEANUP_INTERVAL:
-                cursor.execute("DELETE FROM rate_limits WHERE updated_at < ?", (now_minute - 2,))
-                _last_rate_limit_cleanup = now
-            cursor.execute(
-                "INSERT INTO rate_limits (key, count, updated_at) VALUES (?, 1, ?) "
-                "ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = ?",
-                (bucket_key, now_minute, now_minute),
-            )
-            cursor.execute("SELECT count FROM rate_limits WHERE key = ?", (bucket_key,))
-            row = cursor.fetchone()
-            count = row["count"] if row else 1
-            conn.commit()
-            if count > RATE_LIMIT_PER_MINUTE:
-                raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again in a minute.")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Periodic cleanup instead of per-request
+        now = int(time.time())
+        if now - _last_rate_limit_cleanup > RATE_LIMIT_CLEANUP_INTERVAL:
+            cursor.execute("DELETE FROM rate_limits WHERE updated_at < %s", (now_minute - 2,))
+            _last_rate_limit_cleanup = now
+        cursor.execute(
+            "INSERT INTO rate_limits (key, count, updated_at) VALUES (%s, 1, %s) "
+            "ON CONFLICT (key) DO UPDATE SET count = rate_limits.count + 1, updated_at = %s",
+            (bucket_key, now_minute, now_minute),
+        )
+        cursor.execute("SELECT count FROM rate_limits WHERE key = %s", (bucket_key,))
+        row = cursor.fetchone()
+        count = row["count"] if row else 1
+        conn.commit()
+        if count > RATE_LIMIT_PER_MINUTE:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again in a minute.")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Rate limit error: {e}")
+    finally:
+        if conn:
+            conn.close()
 
     start = time.perf_counter()
     request_id = str(uuid.uuid4())
@@ -308,22 +309,19 @@ async def request_logging_and_rate_limit(request: Request, call_next):
         )
     )
     try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO request_logs(request_id, method, path, status_code, elapsed_ms) VALUES (?, ?, ?, ?, ?)",
-                (request_id, request.method, request.url.path, response.status_code, elapsed_ms),
-            )
-            conn.commit()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO request_logs(request_id, method, path, status_code, elapsed_ms) VALUES (%s, %s, %s, %s, %s)",
+            (request_id, request.method, request.url.path, response.status_code, elapsed_ms),
+        )
+        conn.commit()
     except Exception as log_err:
         logger.warning(f"Failed to log request: {log_err}")
+    finally:
+        if conn:
+            conn.close()
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
     return response
-
-
-
-
-
-

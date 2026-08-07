@@ -54,7 +54,8 @@ def _clear_rate_limits():
     from api.database import get_db_connection
     conn = get_db_connection()
     try:
-        conn.execute("DELETE FROM rate_limits")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM rate_limits")
         conn.commit()
     finally:
         conn.close()
@@ -86,7 +87,8 @@ class AuthFlowTests(unittest.TestCase):
             try:
                 from api.database import get_db_connection
                 conn = get_db_connection()
-                conn.execute("DELETE FROM users WHERE username = ?", (u,))
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM users WHERE username = %s", (u,))
                 conn.commit()
                 conn.close()
             except Exception:
@@ -146,7 +148,9 @@ class AuthFlowTests(unittest.TestCase):
         from api.database import get_db_connection
         conn = get_db_connection()
         try:
-            row = conn.execute("SELECT email_verified FROM users WHERE email = ?", (em,)).fetchone()
+            cursor = conn.cursor()
+            cursor.execute("SELECT email_verified FROM users WHERE email = %s", (em,))
+            row = cursor.fetchone()
             self.assertEqual(row["email_verified"], 1)
         finally:
             conn.close()
@@ -180,9 +184,10 @@ class AuthFlowTests(unittest.TestCase):
         from api.database import get_db_connection
         conn = get_db_connection()
         try:
-            conn.execute(
-                "UPDATE otp_codes SET created_at = datetime('now', '-2 minutes') "
-                "WHERE email = ? AND purpose = 'register'",
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE otp_codes SET created_at = NOW() - INTERVAL '2 minutes' "
+                "WHERE email = %s AND purpose = 'register'",
                 (em,),
             )
             conn.commit()
@@ -206,9 +211,10 @@ class AuthFlowTests(unittest.TestCase):
         from api.database import get_db_connection
         conn = get_db_connection()
         try:
-            conn.execute(
-                "UPDATE otp_codes SET created_at = datetime('now', '-2 minutes') "
-                "WHERE email = ? AND purpose = 'register'",
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE otp_codes SET created_at = NOW() - INTERVAL '2 minutes' "
+                "WHERE email = %s AND purpose = 'register'",
                 (em,),
             )
             conn.commit()
@@ -222,9 +228,10 @@ class AuthFlowTests(unittest.TestCase):
         _verify_email(em, resend_otp)
         conn = get_db_connection()
         try:
-            conn.execute(
-                "UPDATE otp_codes SET created_at = datetime('now', '-2 minutes') "
-                "WHERE email = ? AND purpose = 'register'",
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE otp_codes SET created_at = NOW() - INTERVAL '2 minutes' "
+                "WHERE email = %s AND purpose = 'register'",
                 (em,),
             )
             conn.commit()
@@ -350,7 +357,8 @@ class AnalysisEndpointTests(unittest.TestCase):
             try:
                 from api.database import get_db_connection
                 conn = get_db_connection()
-                conn.execute("DELETE FROM users WHERE username = ?", (u,))
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM users WHERE username = %s", (u,))
                 conn.commit()
                 conn.close()
             except Exception:
@@ -444,7 +452,8 @@ class ShareEndpointTests(unittest.TestCase):
             try:
                 from api.database import get_db_connection
                 conn = get_db_connection()
-                conn.execute("DELETE FROM users WHERE username = ?", (u,))
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM users WHERE username = %s", (u,))
                 conn.commit()
                 conn.close()
             except Exception:

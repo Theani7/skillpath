@@ -40,7 +40,7 @@ def load_skills_cache():
 
         for cat in categories:
             cursor.execute(
-                "SELECT name FROM skills WHERE category_id = ? ORDER BY sort_order",
+                "SELECT name FROM skills WHERE category_id = %s ORDER BY sort_order",
                 (cat["id"],)
             )
             skills = [row["name"] for row in cursor.fetchall()]

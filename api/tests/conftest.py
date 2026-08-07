@@ -1,17 +1,17 @@
 """Test environment isolation.
 
-Runs before any api.* module is imported, so it must use a fresh temp
-database and disable SMTP/Gemini regardless of what .env contains.
-Without this, tests would run against the developer's real cv.db and
-real SMTP credentials.
+Runs before any api.* module is imported, so it must point DATABASE_URL
+at a dedicated test database and disable SMTP/Gemini regardless of what
+.env contains.
+
+Requires a running PostgreSQL instance with a `skillpath_test` database:
+    createdb skillpath_test
 """
 import os
-import tempfile
 
-_test_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-_test_db.close()
-
-os.environ["DB_FILE"] = _test_db.name
+os.environ["DATABASE_URL"] = os.getenv(
+    "TEST_DATABASE_URL", "postgresql://postgres@localhost:5432/skillpath_test"
+)
 os.environ["SMTP_USERNAME"] = ""
 os.environ["SMTP_PASSWORD"] = ""
 os.environ["GEMINI_API_KEY"] = ""

@@ -60,12 +60,12 @@ def _load_user(username: str) -> Optional[dict]:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "SELECT id, username, email, full_name, role, created_at, is_active FROM users WHERE username = ?",
+                "SELECT id, username, email, full_name, role, created_at, is_active FROM users WHERE username = %s",
                 (username,),
             )
         except Exception:
             cursor.execute(
-                "SELECT id, username, email, full_name, role FROM users WHERE username = ?",
+                "SELECT id, username, email, full_name, role FROM users WHERE username = %s",
                 (username,),
             )
         user = cursor.fetchone()

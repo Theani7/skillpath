@@ -78,7 +78,7 @@ async def analyze_resume(
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT result_json FROM analysis_cache WHERE content_hash = ? AND target_role = ? AND (expires_at IS NULL OR expires_at > ?)",
+        "SELECT result_json FROM analysis_cache WHERE content_hash = %s AND target_role = %s AND (expires_at IS NULL OR expires_at > %s)",
         (content_hash, t_role, int(time.time())),
     )
     cache_row = cursor.fetchone()
@@ -90,7 +90,7 @@ async def analyze_resume(
             final_response_payload = json.loads(cache_row["result_json"])
         except (json.JSONDecodeError, TypeError):
             logger.warning(f"Corrupt cache entry for {safe_filename}, deleting and re-parsing")
-            cursor.execute("DELETE FROM analysis_cache WHERE content_hash = ? AND target_role = ?", (content_hash, t_role))
+            cursor.execute("DELETE FROM analysis_cache WHERE content_hash = %s AND target_role = %s", (content_hash, t_role))
             conn.commit()
         else:
             logger.info(f"Cache hit for {safe_filename} - reusing result, saving new user_data row")
@@ -109,7 +109,7 @@ async def analyze_resume(
                 predicted_field_c = final_response_payload.get("predicted_field", "")
                 cursor.execute(
                     """INSERT INTO user_data (sec_token, act_name, act_mail, act_mob, Name, Email_ID, resume_score, Timestamp, Page_no, Predicted_Field, User_level, Actual_skills, Recommended_skills, Recommended_courses, pdf_name, target_role, missing_skills, user_id, analysis_data, content_hash)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (
                         sec_token,
                         resume_data_c.get('name') or 'N/A',
@@ -229,7 +229,7 @@ async def analyze_resume(
 
         # Fetch courses from dynamic DB instead of static dictionary
         recommended_courses = []
-        cursor.execute("SELECT course_name, course_url FROM courses WHERE field = ?", ('General',))
+        cursor.execute("SELECT course_name, course_url FROM courses WHERE field = %s", ('General',))
         for row in cursor.fetchall():
             recommended_courses.append({"name": row['course_name'], "url": row['course_url']})
         
@@ -245,7 +245,7 @@ async def analyze_resume(
                 recommended_skills = all_field_skills[:5]
             
             # Fetch field-specific courses
-            cursor.execute("SELECT course_name, course_url FROM courses WHERE field = ?", (mapping_field,))
+            cursor.execute("SELECT course_name, course_url FROM courses WHERE field = %s", (mapping_field,))
             field_courses = cursor.fetchall()
             if field_courses:
                 recommended_courses = [{"name": row['course_name'], "url": row['course_url']} for row in field_courses]
@@ -299,14 +299,14 @@ async def analyze_resume(
 
         cache_expires = int(time.time()) + 7 * 24 * 3600
         cursor.execute(
-            "INSERT INTO analysis_cache (content_hash, target_role, result_json, expires_at) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT(content_hash, target_role) DO UPDATE SET result_json = excluded.result_json, expires_at = excluded.expires_at",
+            "INSERT INTO analysis_cache (content_hash, target_role, result_json, expires_at) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (content_hash, target_role) DO UPDATE SET result_json = excluded.result_json, expires_at = excluded.expires_at",
             (content_hash, t_role, json.dumps(final_response_payload), cache_expires),
         )
 
         cursor.execute(
             """INSERT INTO user_data (sec_token, act_name, act_mail, act_mob, Name, Email_ID, resume_score, Timestamp, Page_no, Predicted_Field, User_level, Actual_skills, Recommended_skills, Recommended_courses, pdf_name, target_role, missing_skills, user_id, analysis_data, content_hash)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 sec_token,
                 resume_data.get('name') or 'N/A',
@@ -354,7 +354,7 @@ def submit_feedback(feedback: Feedback, current_user: dict = Depends(get_current
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         cursor.execute(
-            "INSERT INTO user_feedback (feed_name, feed_email, feed_score, comments, Timestamp) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO user_feedback (feed_name, feed_email, feed_score, comments, Timestamp) VALUES (%s, %s, %s, %s, %s)",
             (feedback.name, feedback.email, feedback.score, feedback.comments, timestamp)
         )
         conn.commit()

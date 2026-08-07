@@ -8,17 +8,28 @@ from api.security import get_password_hash, verify_password
 class TestEnsureColumnWhitelist:
     def test_allowed_table_passes(self):
         """Tables in whitelist should not raise when calling _ensure_column."""
-        import sqlite3
-        conn = sqlite3.connect(":memory:")
+        import psycopg2
+        import os
+        conn = psycopg2.connect(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/skillpath_test"))
+        conn.autocommit = True
         cursor = conn.cursor()
-        cursor.execute("CREATE TABLE users (id INTEGER PRIMARY KEY)")
-        _ensure_column(cursor, "users", "new_col", "TEXT", "'some_default'")
+        cursor.execute("DROP TABLE IF EXISTS test_users")
+        cursor.execute("CREATE TABLE test_users (id SERIAL PRIMARY KEY)")
+        # Temporarily add to whitelist for test
+        from api.database import ALLOWED_TABLES as _orig
+        import api.database
+        api.database.ALLOWED_TABLES.add("test_users")
+        _ensure_column(cursor, "test_users", "new_col", "TEXT")
+        cursor.execute("DROP TABLE IF EXISTS test_users")
+        api.database.ALLOWED_TABLES.discard("test_users")
         conn.close()
 
     def test_unknown_table_raises(self):
         """Unknown table should raise ValueError."""
-        import sqlite3
-        conn = sqlite3.connect(":memory:")
+        import psycopg2
+        import os
+        conn = psycopg2.connect(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/skillpath_test"))
+        conn.autocommit = True
         cursor = conn.cursor()
         with pytest.raises(ValueError, match="not in the allowed tables whitelist"):
             _ensure_column(cursor, "malicious_table", "col", "TEXT")
