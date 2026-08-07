@@ -22,6 +22,7 @@ def log_audit_action(admin_user: dict, action: str, target_type: str, target_id:
     ip_address = ""
     if request:
         ip_address = request.client.host if request.client else ""
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -30,9 +31,11 @@ def log_audit_action(admin_user: dict, action: str, target_type: str, target_id:
             (admin_user.get("id"), admin_user.get("username", ""), action, target_type, str(target_id) if target_id else "", details, ip_address)
         )
         conn.commit()
-        conn.close()
     except Exception as e:
         logger.warning(f"Failed to write audit log: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 
 class CourseInput(BaseModel):
@@ -479,11 +482,11 @@ def get_advanced_analytics(current_admin: dict = Depends(get_current_admin)):
         top_role = top_role_row['target_role'] if top_role_row else "Insufficient Data"
         
         # 2. Most Common Missing Skill
-        cursor.execute("SELECT missing_skills FROM user_data WHERE missing_skills != ''")
+        cursor.execute("SELECT missing_skills FROM user_data WHERE COALESCE(missing_skills, '') != ''")
         all_missing_skills_rows = cursor.fetchall()
         skill_counts = {}
         for row in all_missing_skills_rows:
-            skills = [s.strip() for s in row['missing_skills'].split(',') if s.strip()]
+            skills = [s.strip() for s in (row['missing_skills'] or '').split(',') if s.strip()]
             for s in skills:
                 skill_counts[s] = skill_counts.get(s, 0) + 1
                 
@@ -551,11 +554,11 @@ def skill_gaps(current_admin: dict = Depends(get_current_admin)):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT missing_skills FROM user_data WHERE missing_skills != ''")
+        cursor.execute("SELECT missing_skills FROM user_data WHERE COALESCE(missing_skills, '') != ''")
         rows = cursor.fetchall()
         skill_counts = {}
         for row in rows:
-            skills = [s.strip() for s in row["missing_skills"].split(",") if s.strip()]
+            skills = [s.strip() for s in (row["missing_skills"] or "").split(",") if s.strip()]
             for s in skills:
                 skill_counts[s] = skill_counts.get(s, 0) + 1
         top_skills = sorted(skill_counts.items(), key=lambda x: x[1], reverse=True)[:10]

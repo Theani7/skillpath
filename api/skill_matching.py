@@ -213,6 +213,7 @@ def _get_role_skills_from_db(target_role: str) -> List[str]:
     """Get skills for a role from job_role_skills table (admin-defined)."""
     if not target_role:
         return []
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -222,17 +223,19 @@ def _get_role_skills_from_db(target_role: str) -> List[str]:
             "WHERE jr.title = %s AND jr.is_active = 1",
             (target_role,)
         )
-        skills = [row[0] for row in cursor.fetchall()]
-        conn.close()
-        return skills
+        return [row["skill_name"] for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Failed to get role skills: {e}")
         return []
+    finally:
+        if conn:
+            conn.close()
 
 def _get_required_skills_from_db(target_role: str) -> List[str]:
     """Get only required (core) skills for a role."""
     if not target_role:
         return []
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -242,12 +245,13 @@ def _get_required_skills_from_db(target_role: str) -> List[str]:
             "WHERE jr.title = %s AND jr.is_active = 1 AND js.is_required = 1",
             (target_role,)
         )
-        skills = [row[0] for row in cursor.fetchall()]
-        conn.close()
-        return skills
+        return [row["skill_name"] for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Failed to get required skills: {e}")
         return []
+    finally:
+        if conn:
+            conn.close()
 
 def _compute_local_match_score(
     found_skills: List[str], target_role: Optional[str]

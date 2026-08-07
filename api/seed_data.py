@@ -59,13 +59,13 @@ def load_skills_cache():
         for row in cursor.fetchall():
             skill_aliases[row["alias"]] = row["canonical_skill"]
 
-        _SKILLS_CACHE = {
+        _SKILLS_CACHE.update({
             "taxonomy": taxonomy,
             "all_skills": all_skills,
             "role_synonyms": role_synonyms,
             "skill_aliases": skill_aliases,
             "loaded": True,
-        }
+        })
     except Exception as e:
         logger.error(f"Failed to load skills cache: {e}")
         _SKILLS_CACHE["loaded"] = False
@@ -144,12 +144,12 @@ def load_market_cache():
         for row in cursor.fetchall():
             role_aliases[row["alias"]] = row["target_field"]
 
-        _MARKET_CACHE = {
+        _MARKET_CACHE.update({
             "field_keywords": field_keywords,
             "industry_trends": industry_trends,
             "role_aliases": role_aliases,
             "loaded": True,
-        }
+        })
     except Exception as e:
         logger.error(f"Failed to load market cache: {e}")
         _MARKET_CACHE["loaded"] = False
@@ -203,10 +203,10 @@ def load_skill_recs_cache():
                 recommendations[row["field_name"]] = []
             recommendations[row["field_name"]].append(row["skill_name"])
 
-        _SKILL_RECS_CACHE = {
+        _SKILL_RECS_CACHE.update({
             "recommendations": recommendations,
             "loaded": True,
-        }
+        })
     except Exception as e:
         logger.error(f"Failed to load skill recommendations cache: {e}")
         _SKILL_RECS_CACHE["loaded"] = False
@@ -267,7 +267,7 @@ def load_roadmaps_cache():
                 "skills": json.loads(row["skills"]),
             })
 
-        _ROADMAPS_CACHE = {"data": roadmaps, "loaded": True}
+        _ROADMAPS_CACHE.update({"data": roadmaps, "loaded": True})
     except Exception as e:
         logger.error(f"Failed to load roadmaps cache: {e}")
         _ROADMAPS_CACHE["loaded"] = False
@@ -291,7 +291,7 @@ def load_actions_cache():
                 actions[row["skill_name"]] = []
             actions[row["skill_name"]].append(row["action_text"])
 
-        _ACTIONS_CACHE = {"data": actions, "loaded": True}
+        _ACTIONS_CACHE.update({"data": actions, "loaded": True})
     except Exception as e:
         logger.error(f"Failed to load actions cache: {e}")
         _ACTIONS_CACHE["loaded"] = False
@@ -319,7 +319,7 @@ def load_resources_cache():
                 "type": row["resource_type"],
             })
 
-        _RESOURCES_CACHE = {"data": resources, "loaded": True}
+        _RESOURCES_CACHE.update({"data": resources, "loaded": True})
     except Exception as e:
         logger.error(f"Failed to load resources cache: {e}")
         _RESOURCES_CACHE["loaded"] = False
@@ -341,7 +341,7 @@ def load_difficulty_cache():
         for row in cursor.fetchall():
             difficulty[row["skill_name"]] = row["difficulty_level"]
 
-        _DIFFICULTY_CACHE = {"data": difficulty, "loaded": True}
+        _DIFFICULTY_CACHE.update({"data": difficulty, "loaded": True})
     except Exception as e:
         logger.error(f"Failed to load difficulty cache: {e}")
         _DIFFICULTY_CACHE["loaded"] = False
@@ -365,7 +365,7 @@ def load_clusters_cache():
                 clusters[row["cluster_name"]] = set()
             clusters[row["cluster_name"]].add(row["skill_name"])
 
-        _CLUSTERS_CACHE = {"data": clusters, "loaded": True}
+        _CLUSTERS_CACHE.update({"data": clusters, "loaded": True})
     except Exception as e:
         logger.error(f"Failed to load clusters cache: {e}")
         _CLUSTERS_CACHE["loaded"] = False
@@ -441,7 +441,7 @@ def load_videos_cache():
                 videos[field][vtype] = []
             videos[field][vtype].append(row["url"])
 
-        _VIDEOS_CACHE = {"data": videos, "loaded": True}
+        _VIDEOS_CACHE.update({"data": videos, "loaded": True})
     except Exception as e:
         logger.error(f"Failed to load videos cache: {e}")
         _VIDEOS_CACHE["loaded"] = False
@@ -468,7 +468,7 @@ def load_role_configs_cache():
                 "key_tools": json.loads(row["key_tools"]),
             }
 
-        _ROLE_CONFIGS_CACHE = {"data": configs, "loaded": True}
+        _ROLE_CONFIGS_CACHE.update({"data": configs, "loaded": True})
     except Exception as e:
         logger.error(f"Failed to load role configs cache: {e}")
         _ROLE_CONFIGS_CACHE["loaded"] = False

@@ -403,7 +403,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
         if attempt_row:
             if attempt_row["locked_until"] and now < attempt_row["locked_until"]:
                 remaining = int(attempt_row["locked_until"] - now)
-                conn.close()
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=f"Too many failed attempts. Try again in {remaining} seconds."
@@ -424,7 +423,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
                     (login_key, 1, now, 0)
                 )
             conn.commit()
-            conn.close()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
@@ -434,14 +432,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), response: Resp
         user_dict = dict(user)
 
         if "email_verified" in user_dict and user_dict["email_verified"] == 0:
-            conn.close()
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Please verify your email address first. Check your inbox for the verification code.",
             )
 
         if "is_active" in user_dict and user_dict["is_active"] == 0:
-            conn.close()
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account has been deactivated. Contact an administrator.",
