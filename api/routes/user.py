@@ -129,7 +129,7 @@ def get_user_history(current_user: dict = Depends(get_current_user)):
     try:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT ID, Timestamp, Predicted_Field, resume_score, target_role, missing_skills, Actual_skills, Recommended_skills, analysis_data
+            SELECT ID, "Timestamp", "Predicted_Field", resume_score, target_role, missing_skills, "Actual_skills", "Recommended_skills", analysis_data
             FROM user_data
             WHERE user_id = %s
             ORDER BY ID DESC

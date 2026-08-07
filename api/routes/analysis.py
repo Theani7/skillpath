@@ -108,7 +108,7 @@ async def analyze_resume(
                 resume_score_c = final_response_payload.get("resume_score", 0)
                 predicted_field_c = final_response_payload.get("predicted_field", "")
                 cursor.execute(
-                    """INSERT INTO user_data (sec_token, act_name, act_mail, act_mob, Name, Email_ID, resume_score, Timestamp, Page_no, Predicted_Field, User_level, Actual_skills, Recommended_skills, Recommended_courses, pdf_name, target_role, missing_skills, user_id, analysis_data, content_hash)
+                    """INSERT INTO user_data (sec_token, act_name, act_mail, act_mob, "Name", "Email_ID", resume_score, "Timestamp", "Page_no", "Predicted_Field", "User_level", "Actual_skills", "Recommended_skills", "Recommended_courses", pdf_name, target_role, missing_skills, user_id, analysis_data, content_hash)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (
                         sec_token,
@@ -305,7 +305,7 @@ async def analyze_resume(
         )
 
         cursor.execute(
-            """INSERT INTO user_data (sec_token, act_name, act_mail, act_mob, Name, Email_ID, resume_score, Timestamp, Page_no, Predicted_Field, User_level, Actual_skills, Recommended_skills, Recommended_courses, pdf_name, target_role, missing_skills, user_id, analysis_data, content_hash)
+            """INSERT INTO user_data (sec_token, act_name, act_mail, act_mob, "Name", "Email_ID", resume_score, "Timestamp", "Page_no", "Predicted_Field", "User_level", "Actual_skills", "Recommended_skills", "Recommended_courses", pdf_name, target_role, missing_skills, user_id, analysis_data, content_hash)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 sec_token,

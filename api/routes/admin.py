@@ -85,8 +85,8 @@ def get_admin_user_detail(analysis_id: int, current_admin: dict = Depends(get_cu
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT ID, user_id, Name, Email_ID, Timestamp, Predicted_Field, resume_score,
-                   target_role, missing_skills, Actual_skills, Recommended_skills,
+            SELECT ID, user_id, "Name", "Email_ID", "Timestamp", "Predicted_Field", resume_score,
+                   target_role, missing_skills, "Actual_skills", "Recommended_skills",
                    pdf_name, analysis_data
             FROM user_data
             WHERE ID = %s
