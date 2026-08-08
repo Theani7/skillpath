@@ -62,7 +62,7 @@ class ErrorBoundary extends Component<Props, State> {
           }}>
             We hit an unexpected error rendering this view. Your analysis is still safe - try again or start over.
           </p>
-          {this.state.error?.message && (
+          {import.meta.env.DEV && this.state.error?.message && (
             <p style={{
               fontSize: '12px', color: 'var(--color-text-light)',
               fontFamily: 'monospace', padding: '10px',
