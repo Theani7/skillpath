@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import logging
 import os
@@ -6,6 +7,7 @@ import re
 import secrets
 import tempfile
 import time
+import zipfile
 from datetime import datetime
 from typing import Optional
 
@@ -31,7 +33,7 @@ _CACHE_VERSION = 3
 MAX_FILE_SIZE = 5 * 1024 * 1024
 
 PDF_MAGIC = b"%PDF"
-DOCX_MAGIC = b"PK\x03\x04"
+ZIP_MAGIC = b"PK\x03\x04"
 
 
 class Feedback(BaseModel):
@@ -50,8 +52,19 @@ def get_content_hash(data: bytes) -> str:
 def _detect_filetype(contents: bytes, filename: str) -> Optional[str]:
     if contents.startswith(PDF_MAGIC):
         return "pdf"
-    if contents.startswith(DOCX_MAGIC):
-        return "docx"
+    if contents.startswith(ZIP_MAGIC):
+        # PK\x03\x04 is the generic ZIP signature - xlsx, pptx, jar and any
+        # plain .zip share it. Only a real OOXML wordprocessing package has
+        # [Content_Types].xml plus word/document.xml, so check the members
+        # rather than trusting the prefix.
+        try:
+            with zipfile.ZipFile(io.BytesIO(contents)) as z:
+                names = set(z.namelist())
+        except zipfile.BadZipFile:
+            return None
+        if "[Content_Types].xml" in names and "word/document.xml" in names:
+            return "docx"
+        return None
     return None
 
 

@@ -58,18 +58,10 @@ def _load_user(username: str) -> Optional[dict]:
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        import psycopg2.errors
-        try:
-            cursor.execute(
-                "SELECT id, username, email, full_name, role, created_at, is_active FROM users WHERE username = %s",
-                (username,),
-            )
-        except psycopg2.errors.UndefinedColumn:
-            conn.rollback()
-            cursor.execute(
-                "SELECT id, username, email, full_name, role FROM users WHERE username = %s",
-                (username,),
-            )
+        cursor.execute(
+            "SELECT id, username, email, full_name, role, created_at, is_active FROM users WHERE username = %s",
+            (username,),
+        )
         user = cursor.fetchone()
         return dict(user) if user else None
     finally:

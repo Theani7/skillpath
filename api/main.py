@@ -4,10 +4,13 @@ load_dotenv()
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
+import asyncio
 import os
 import time
 import uuid
 import logging
+import psycopg2.extras
 
 from api.database import get_db_connection
 from api.auth import client_ip
@@ -209,6 +212,78 @@ RATE_LIMIT_CLEANUP_INTERVAL = 300  # 5 minutes
 ENV = os.getenv("ENV", "development").lower()
 IS_PROD = ENV in ("production", "prod")
 
+# Request logs are written by a single background consumer instead of inline in
+# the middleware. psycopg2 is blocking, so an inline INSERT stalls the whole
+# event loop - not just the current request - on every single call.
+REQUEST_LOG_QUEUE_MAX = 1000
+# Created on startup, not at import: an asyncio.Queue binds to the running loop
+# the first time it is awaited, so building it at import time breaks whenever
+# the app runs under a different loop (tests, multiple workers, reloads).
+_request_log_queue = None
+_request_log_worker = None
+_dropped_log_count = 0
+
+
+def _write_request_logs(batch: list) -> None:
+    """Blocking DB write, executed in a worker thread."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        psycopg2.extras.execute_values(
+            cursor,
+            "INSERT INTO request_logs(request_id, method, path, status_code, elapsed_ms) VALUES %s",
+            batch,
+        )
+        conn.commit()
+    except Exception as log_err:
+        logger.warning(f"Failed to log {len(batch)} request(s): {log_err}")
+    finally:
+        if conn:
+            conn.close()
+
+
+async def _request_log_consumer() -> None:
+    """Drain the queue and batch-insert, so bursts cost one round-trip."""
+    queue = _request_log_queue
+    while True:
+        try:
+            first = await queue.get()
+            batch = [first]
+            while len(batch) < 100:
+                try:
+                    batch.append(queue.get_nowait())
+                except asyncio.QueueEmpty:
+                    break
+            await run_in_threadpool(_write_request_logs, batch)
+            for _ in batch:
+                queue.task_done()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"Request-log consumer error: {e}")
+            await asyncio.sleep(1)
+
+
+@app.on_event("startup")
+async def _start_request_log_worker():
+    global _request_log_worker, _request_log_queue
+    _request_log_queue = asyncio.Queue(maxsize=REQUEST_LOG_QUEUE_MAX)
+    _request_log_worker = asyncio.create_task(_request_log_consumer())
+
+
+@app.on_event("shutdown")
+async def _stop_request_log_worker():
+    global _request_log_worker, _request_log_queue
+    if _request_log_worker:
+        _request_log_worker.cancel()
+        try:
+            await _request_log_worker
+        except asyncio.CancelledError:
+            pass
+        _request_log_worker = None
+    _request_log_queue = None
+
 # Relaxed rate limit in development so local testing isn't annoying.
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120" if IS_PROD else "1000"))
 
@@ -252,43 +327,47 @@ async def add_security_headers(request, call_next):
 
 
 
-@app.middleware("http")
-async def request_logging_and_rate_limit(request: Request, call_next):
+def _check_rate_limit(bucket_key: str, now_minute: int) -> int:
+    """Blocking rate-limit bookkeeping, executed in a worker thread."""
     global _last_rate_limit_cleanup
-    if request.method == "OPTIONS":
-        return await call_next(request)
-
-    request_ip = client_ip(request)
-    now_minute = int(time.time() // 60)
-    bucket_key = f"{request_ip}:{now_minute}"
-
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Periodic cleanup instead of per-request
         now = int(time.time())
         if now - _last_rate_limit_cleanup > RATE_LIMIT_CLEANUP_INTERVAL:
             cursor.execute("DELETE FROM rate_limits WHERE updated_at < %s", (now_minute - 2,))
             _last_rate_limit_cleanup = now
         cursor.execute(
             "INSERT INTO rate_limits (key, count, updated_at) VALUES (%s, 1, %s) "
-            "ON CONFLICT (key) DO UPDATE SET count = rate_limits.count + 1, updated_at = %s",
+            "ON CONFLICT (key) DO UPDATE SET count = rate_limits.count + 1, updated_at = %s "
+            "RETURNING count",
             (bucket_key, now_minute, now_minute),
         )
-        cursor.execute("SELECT count FROM rate_limits WHERE key = %s", (bucket_key,))
         row = cursor.fetchone()
-        count = row["count"] if row else 1
         conn.commit()
-        if count > RATE_LIMIT_PER_MINUTE:
-            raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again in a minute.")
-    except HTTPException:
-        raise
+        return row["count"] if row else 1
     except Exception as e:
         logger.error(f"Rate limit error: {e}")
+        # Fail open - a bookkeeping failure must not lock everyone out.
+        return 0
     finally:
         if conn:
             conn.close()
+
+
+@app.middleware("http")
+async def request_logging_and_rate_limit(request: Request, call_next):
+    global _dropped_log_count
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    now_minute = int(time.time() // 60)
+    bucket_key = f"{client_ip(request)}:{now_minute}"
+
+    count = await run_in_threadpool(_check_rate_limit, bucket_key, now_minute)
+    if count > RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again in a minute.")
 
     start = time.perf_counter()
     request_id = str(uuid.uuid4())
@@ -306,19 +385,20 @@ async def request_logging_and_rate_limit(request: Request, call_next):
             }
         )
     )
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO request_logs(request_id, method, path, status_code, elapsed_ms) VALUES (%s, %s, %s, %s, %s)",
-            (request_id, request.method, request.url.path, response.status_code, elapsed_ms),
-        )
-        conn.commit()
-    except Exception as log_err:
-        logger.warning(f"Failed to log request: {log_err}")
-    finally:
-        if conn:
-            conn.close()
+
+    # Hand the row to the background writer. Never block the response on it,
+    # and drop rather than stall if the writer has fallen behind.
+    queue = _request_log_queue
+    if queue is not None:
+        try:
+            queue.put_nowait(
+                (request_id, request.method, request.url.path, response.status_code, elapsed_ms)
+            )
+        except asyncio.QueueFull:
+            _dropped_log_count += 1
+            if _dropped_log_count % 100 == 1:
+                logger.warning(f"Request-log queue full, dropped {_dropped_log_count} entries so far")
+
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"

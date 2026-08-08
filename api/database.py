@@ -73,17 +73,41 @@ def _get_pool():
             )
         if database_url.startswith("postgres://"):
             database_url = database_url.replace("postgres://", "postgresql://", 1)
+        # Sync endpoints and the middleware run in Starlette's threadpool, so
+        # the pool must be at least as large as that threadpool or concurrent
+        # requests exhaust it and raise PoolError. Keep DB_POOL_MAX >=
+        # threadpool size (Starlette default 40).
         _pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=1,
-            maxconn=20,
+            minconn=int(os.getenv("DB_POOL_MIN", "1")),
+            maxconn=int(os.getenv("DB_POOL_MAX", "50")),
             dsn=database_url,
         )
     return _pool
 
 
+POOL_ACQUIRE_TIMEOUT = float(os.getenv("DB_POOL_ACQUIRE_TIMEOUT", "5"))
+
+
 def get_db_connection():
+    """Check out a pooled connection, waiting briefly if the pool is saturated.
+
+    psycopg2 pools raise immediately when exhausted. Under a burst that turns a
+    transient spike into a 500, so wait for a connection to be returned before
+    giving up.
+    """
     pool = _get_pool()
-    raw = pool.getconn()
+    deadline = time.monotonic() + POOL_ACQUIRE_TIMEOUT
+    delay = 0.005
+    while True:
+        try:
+            raw = pool.getconn()
+            break
+        except psycopg2.pool.PoolError:
+            if time.monotonic() >= deadline:
+                logger.error("DB pool exhausted; raise DB_POOL_MAX or reduce concurrency")
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 0.1)
     raw.autocommit = False
     return _PooledConnection(raw, pool)
 
@@ -644,17 +668,27 @@ def init_db():
                 )
 
         # --- Fix is_required flags on job_role_skills ---
+        # Single round-trip: build the desired state in Python, then apply it
+        # with one UPDATE ... FROM (VALUES ...) instead of one query per row.
         cursor.execute("SELECT jr.id, jr.title, js.skill_name FROM job_role_skills js JOIN job_roles jr ON js.job_role_id = jr.id")
-        role_skill_rows = cursor.fetchall()
-        for row in role_skill_rows:
-            role_id = row["id"]
-            role_title = row["title"]
-            skill_name = row["skill_name"]
-            core = CORE_SKILLS_BY_ROLE.get(role_title, set())
-            desired = 1 if skill_name in core else 0
-            cursor.execute(
-                "UPDATE job_role_skills SET is_required = %s WHERE job_role_id = %s AND skill_name = %s",
-                (desired, role_id, skill_name)
+        desired_flags = [
+            (row["id"], row["skill_name"],
+             1 if row["skill_name"] in CORE_SKILLS_BY_ROLE.get(row["title"], set()) else 0)
+            for row in cursor.fetchall()
+        ]
+        if desired_flags:
+            psycopg2.extras.execute_values(
+                cursor,
+                """
+                UPDATE job_role_skills AS js
+                SET is_required = v.is_required
+                FROM (VALUES %s) AS v(job_role_id, skill_name, is_required)
+                WHERE js.job_role_id = v.job_role_id
+                  AND js.skill_name = v.skill_name
+                  AND js.is_required IS DISTINCT FROM v.is_required
+                """,
+                desired_flags,
+                template="(%s::int, %s::varchar, %s::int)",
             )
 
         # --- Cleanup expired entries ---
