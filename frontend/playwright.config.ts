@@ -27,9 +27,16 @@ export default defineConfig({
   // Serve the production build. These specs stub the API at the network layer,
   // so no backend is required.
   webServer: {
-    command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
-    url: `http://127.0.0.1:${PORT}`,
+    // --host 127.0.0.1 is required, not cosmetic. `vite preview` otherwise
+    // binds IPv4 loopback only, while Node 22+ on the CI runners resolves
+    // localhost to ::1 first, so the readiness probe never connects and the
+    // job dies on "Timed out waiting from config.webServer".
+    command: `npm run preview -- --host 127.0.0.1 --port ${PORT} --strictPort`,
+    url: `http://127.0.0.1:${PORT}/`,
     reuseExistingServer: !process.env.CI,
+    // The build is a separate CI step, so this only covers server boot.
     timeout: 120_000,
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
 });
