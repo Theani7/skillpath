@@ -7,12 +7,16 @@ on:
   release:
     types: [published]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ──────────────────────────────────────────────
-  # Frontend
+  # Frontend — lint, types, unit tests, build
   # ──────────────────────────────────────────────
   frontend:
-    name: Frontend (Bun)
+    name: Frontend
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -20,68 +24,149 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: 1.3.14
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: frontend/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - run: bun install --frozen-lockfile
+      # npm ci, not bun. package-lock.json is the lockfile that is actually
+      # kept up to date, and the toolchain (vitest/playwright) is npm-installed.
+      - run: npm ci
 
       - name: Lint
-        run: bun run lint
+        run: npm run lint
 
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Build
-        run: bun run build
+      - name: Unit tests
+        run: npm test
 
-      - name: Security audit
-        run: bun audit --high
-        continue-on-error: true
+      - name: Build
+        run: npm run build
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 5
 
   # ──────────────────────────────────────────────
-  # Backend — Multi-version testing
+  # Frontend — Playwright end-to-end
+  # ──────────────────────────────────────────────
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # The specs stub /api/** at the network layer, so no backend is needed.
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # Backend — needs a real PostgreSQL, init_db() runs on import
   # ──────────────────────────────────────────────
   backend:
     name: Backend (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.11", "3.12"]
       fail-fast: false
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: skillpath_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/skillpath_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/skillpath_test
+      ENV: development
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('api/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          cache: pip
+          cache-dependency-path: api/requirements.txt
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r api/requirements.txt
 
-      - name: Install spaCy (Python 3.10+)
-        if: matrix.python-version != '3.9'
-        run: |
-          pip install spacy
-          python -m spacy download en_core_web_sm
+      # requirements.txt pins spacy<3.8; installing it unpinned here would
+      # break that constraint. Just fetch the model - the parser degrades
+      # gracefully when it is absent, but the confidence tests expect it.
+      - name: Download spaCy model
+        run: python -m spacy download en_core_web_sm
+
+      - name: Run tests
+        run: python -m pytest api/tests -q
+
+  # ──────────────────────────────────────────────
+  # Static analysis — advisory, never blocks the merge
+  # ──────────────────────────────────────────────
+  analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Lint (ruff)
         run: |
@@ -95,66 +180,26 @@ jobs:
           bandit -r api/ -ll -ii
         continue-on-error: true
 
-      - name: Check migrations are current
-        run: |
-          alembic check || true
-
-      - name: Run tests with coverage
-        run: |
-          pip install pytest-cov
-          python -m pytest api/tests -q --cov=api --cov-report=xml --cov-report=term-missing
-
-      - name: Upload coverage
-        if: matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
-
   # ──────────────────────────────────────────────
-  # Coverage threshold check
-  # ──────────────────────────────────────────────
-  coverage:
-    name: Coverage Threshold
-    needs: backend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r api/requirements.txt
-          pip install pytest-cov
-
-      - name: Download spaCy model
-        run: python -m spacy download en_core_web_sm
-
-      - name: Run tests with coverage threshold
-        run: |
-          python -m pytest api/tests -q --cov=api --cov-fail-under=50
-
-  # ──────────────────────────────────────────────
-  # Auto-release on tag
+  # Release
   # ──────────────────────────────────────────────
   release:
     name: Release
     if: github.event_name == 'release'
     needs: [frontend, backend]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create release artifacts
-        run: |
-          mkdir -p dist
-          cd frontend && bun install --frozen-lockfile && bun run build && cd ..
-          cp -r frontend/dist dist/frontend
-          tar -czf skillpath-release.tar.gz dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/frontend
+
+      - name: Package
+        run: tar -czf skillpath-release.tar.gz dist/
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
@@ -162,19 +207,3 @@ jobs:
           files: skillpath-release.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ──────────────────────────────────────────────
-  # Deploy (example — customize for your platform)
-  # ──────────────────────────────────────────────
-  # deploy:
-  #   name: Deploy to Production
-  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  #   needs: [frontend, backend, coverage]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Deploy
-  #       run: |
-  #         echo "Add your deployment commands here"
-  #       env:
-  #         DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}

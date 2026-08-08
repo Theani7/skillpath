@@ -79,6 +79,10 @@ def _make_pdf_content(text="Simple resume text"):
 class AuthFlowTests(unittest.TestCase):
     def setUp(self):
         _clear_rate_limits()
+        # `client` is module-level, so auth cookies set by an earlier test
+        # persist into this one. Without this, tests that assert an
+        # unauthenticated 401 pass or fail depending on execution order.
+        client.cookies.clear()
         self.uid = int(time.time() * 1000000)
         self.users = []
 
@@ -345,10 +349,11 @@ class AuthFlowTests(unittest.TestCase):
 
 
 class AnalysisEndpointTests(unittest.TestCase):
-    def setUp(self):
-        self.uid = int(time.time() * 1000000)
+    # Note: this class previously declared setUp twice, so the first definition
+    # was silently discarded by Python. Merged into one.
     def setUp(self):
         _clear_rate_limits()
+        client.cookies.clear()
         self.uid = int(time.time() * 1000000)
         self.users = []
 
@@ -444,6 +449,7 @@ class AnalysisEndpointTests(unittest.TestCase):
 class ShareEndpointTests(unittest.TestCase):
     def setUp(self):
         _clear_rate_limits()
+        client.cookies.clear()
         self.uid = int(time.time() * 1000000)
         self.users = []
 
