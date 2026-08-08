@@ -22,6 +22,7 @@ function AIInterviewMode({ selectedRole }: Props) {
   const [questionNumber, setQuestionNumber] = useState<number>(0);
   const [finished, setFinished] = useState<boolean>(false);
   const [evaluation, setEvaluation] = useState<InterviewEvaluation | null>(null);
+  const [error, setError] = useState<string>('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,8 +40,10 @@ function AIInterviewMode({ selectedRole }: Props) {
       setQuestionNumber(1);
       setFinished(false);
       setEvaluation(null);
+      setError('');
     } catch (err) {
       console.error('Failed to start interview:', err);
+      setError('Could not start the interview. Please try again.');
     } finally {
       setStarting(false);
     }
@@ -51,20 +54,24 @@ function AIInterviewMode({ selectedRole }: Props) {
     setLoading(true);
     const currentQ = currentQuestion;
     const answer = userAnswer.trim();
-
-    setChatHistory(prev => [...prev, { type: 'question', text: currentQ }, { type: 'answer', text: answer }]);
-    setUserAnswer('');
-    setFeedback('');
+    setError('');
 
     try {
       const res = await api.post('/api/mock-interview/answer', {
         session_id: sessionId, question: currentQ, answer, role: selectedRole, chat_history: chatHistory,
       });
-      setFeedback(res.data.feedback);
-      setCurrentQuestion(res.data.next_question);
-      setQuestionNumber(res.data.question_number);
+      // Commit to the transcript only once the exchange has succeeded.
+      // Doing it up front meant a failed request left the question in history
+      // while the session had not actually advanced.
+      setChatHistory(prev => [...prev, { type: 'question', text: currentQ }, { type: 'answer', text: answer }]);
+      setUserAnswer('');
+      setFeedback(res.data.feedback ?? '');
+      setCurrentQuestion(res.data.next_question ?? '');
+      setQuestionNumber(res.data.question_number ?? questionNumber + 1);
     } catch (_err) {
-      setFeedback('');
+      // Keep the typed answer and the current question so the user can retry
+      // instead of losing their work and being stranded on a blank turn.
+      setError('Could not send your answer. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -299,6 +306,7 @@ function AIInterviewMode({ selectedRole }: Props) {
                 style={{
                   display: 'flex', gap: '12px', alignItems: 'flex-start', marginLeft: '46px',
                 }}
+                data-testid="coach-note"
               >
                 <div style={{
                   flex: 1, padding: '12px 16px', borderRadius: '14px',
@@ -323,6 +331,40 @@ function AIInterviewMode({ selectedRole }: Props) {
                 }}>
                   <TypingDots />
                 </div>
+              </div>
+            )}
+
+            {/* The question awaiting an answer. It only enters chatHistory once
+                it has been answered, so without this the very first question -
+                and every follow-up - stayed invisible until after the user had
+                already replied to it. */}
+            {!loading && currentQuestion && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}
+                data-testid="current-question"
+              >
+                <InterviewerAvatar size={34} />
+                <div style={{ maxWidth: '82%' }}>
+                  <div style={{
+                    padding: '12px 16px', borderRadius: '4px 14px 14px 14px',
+                    background: 'var(--color-bg)', color: 'var(--color-text)',
+                    border: '1px solid var(--color-border)', fontSize: '14px', lineHeight: 1.6,
+                  }}>{currentQuestion}</div>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-light)', marginLeft: '4px', fontWeight: 600 }}>Interviewer</span>
+                </div>
+              </motion.div>
+            )}
+
+            {error && (
+              <div role="alert" style={{
+                padding: '10px 14px', borderRadius: '12px',
+                background: 'var(--color-error-light)', color: 'var(--color-error)',
+                border: '1px solid var(--color-error)', fontSize: '13px',
+              }}>
+                {error}
               </div>
             )}
 

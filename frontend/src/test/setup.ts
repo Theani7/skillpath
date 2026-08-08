@@ -33,6 +33,11 @@ globalThis.ResizeObserver = class {
   disconnect() {}
 };
 
+// jsdom does not implement scrollIntoView; chat views call it on every update.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 if (!window.matchMedia) {
   window.matchMedia = ((query: string) => ({
     matches: false,
