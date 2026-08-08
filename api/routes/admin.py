@@ -1160,8 +1160,13 @@ def admin_reset_password(body: PasswordResetInput, current_admin: dict = Depends
 
 
 @router.get("/api/admin/export/{table_name}")
-def export_table(table_name: str, current_admin: dict = Depends(get_current_admin)):
-    """Export a table as JSON."""
+def export_table(
+    table_name: str,
+    current_admin: dict = Depends(get_current_admin),
+    limit: int = Query(default=10000, ge=1, le=100000),
+    offset: int = Query(default=0, ge=0),
+):
+    """Export a table as JSON. Paginated so large tables are not silently cut off."""
     allowed_tables = [
         "users", "user_data", "courses", "user_feedback", "job_roles", "audit_logs",
         "skill_categories", "skills", "role_synonyms", "skill_aliases",
@@ -1179,12 +1184,25 @@ def export_table(table_name: str, current_admin: dict = Depends(get_current_admi
     try:
         cursor = conn.cursor()
         cursor.execute(
-            sql.SQL("SELECT * FROM {} LIMIT 1000").format(sql.Identifier(table_name))
+            sql.SQL("SELECT COUNT(*) AS total FROM {}").format(sql.Identifier(table_name))
+        )
+        total = cursor.fetchone()["total"]
+        cursor.execute(
+            sql.SQL("SELECT * FROM {} LIMIT %s OFFSET %s").format(sql.Identifier(table_name)),
+            (limit, offset),
         )
         rows = cursor.fetchall()
     finally:
         conn.close()
-    return {"table": table_name, "count": len(rows), "data": [dict(r) for r in rows]}
+    return {
+        "table": table_name,
+        "count": len(rows),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(rows) < total,
+        "data": [dict(r) for r in rows],
+    }
 
 
 # ============================================================

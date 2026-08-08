@@ -21,6 +21,7 @@ const Settings = () => {
   const [showContactSupport, setShowContactSupport] = useState<boolean>(false);
 
   const [busy, setBusy] = useState<boolean>(false);
+  const [exporting, setExporting] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastItem | null>(null);
 
   const [passwordForm, setPasswordForm] = useState({
@@ -48,30 +49,24 @@ const Settings = () => {
   };
 
   const handleExportData = async () => {
+    if (exporting) return;
+    setExporting(true);
     try {
-      const res = await api.get('/api/user/history');
-      const profile = await api.get('/api/user/profile');
-      const prefs = await api.get('/api/user/preferences');
-      const blob = new Blob(
-        [JSON.stringify({
-          exported_at: new Date().toISOString(),
-          user: { username: user?.username, email: user?.email, role: user?.role },
-          profile: profile.data.profile,
-          preferences: prefs.data.preferences,
-          analyses: res.data.history,
-        }, null, 2)],
-        { type: 'application/json' }
-      );
+      const res = await api.get('/api/user/export');
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `skillpath-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast('Data exported');
+      const c = res.data?.counts;
+      showToast(c ? `Exported ${c.analyses} analyses and all account data` : 'Data exported');
     } catch (err: unknown) {
       console.error(err);
       showToast('Failed to export data', 'error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -222,7 +217,7 @@ const Settings = () => {
         </motion.div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <DataPrivacyCard handleExportData={handleExportData} onClearHistory={() => setShowClearHistory(true)} />
+          <DataPrivacyCard handleExportData={handleExportData} exporting={exporting} onClearHistory={() => setShowClearHistory(true)} />
           <SecurityCard
             passwordForm={passwordForm} setPasswordForm={setPasswordForm}
             passwordErrors={passwordErrors} passwordLoading={passwordLoading}

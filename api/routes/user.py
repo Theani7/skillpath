@@ -442,6 +442,106 @@ def get_skill_trends(current_user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/export")
+def export_my_data(current_user: dict = Depends(get_current_user)):
+    """Export every row this user owns, in one call.
+
+    Mirrors exactly what delete_account() removes, so "export" and "delete"
+    can never drift apart on what counts as the user's data.
+    """
+    if not current_user or "id" not in current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized request")
+
+    uid = current_user["id"]
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT id, username, email, full_name, role, created_at FROM users WHERE id = %s",
+            (uid,),
+        )
+        account = cursor.fetchone()
+
+        cursor.execute(
+            """
+            SELECT user_id, full_name, phone, location, bio,
+                   current_job_role AS current_role,
+                   experience_years, linkedin_url, github_url, updated_at
+            FROM user_profiles WHERE user_id = %s
+            """,
+            (uid,),
+        )
+        profile = cursor.fetchone()
+
+        cursor.execute("SELECT * FROM user_preferences WHERE user_id = %s", (uid,))
+        preferences = cursor.fetchone()
+
+        cursor.execute(
+            """
+            SELECT id, "Timestamp", "Predicted_Field", resume_score, target_role,
+                   missing_skills, "Actual_skills", "Recommended_skills",
+                   pdf_name, analysis_data
+            FROM user_data WHERE user_id = %s ORDER BY id ASC
+            """,
+            (uid,),
+        )
+        analyses = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            raw = item.pop("analysis_data", None)
+            if raw:
+                try:
+                    item["analysis"] = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    item["analysis"] = None
+            else:
+                item["analysis"] = None
+            for key in ("missing_skills", "Actual_skills", "Recommended_skills"):
+                item[key] = [s.strip() for s in (item.get(key) or "").split(",") if s.strip()]
+            analyses.append(item)
+
+        cursor.execute(
+            "SELECT analysis_id, phase_index, task_index, completed, completed_at "
+            "FROM user_roadmap_progress WHERE user_id = %s ORDER BY id ASC",
+            (uid,),
+        )
+        roadmap_progress = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute(
+            "SELECT token, analysis_id, expires_at, is_public, created_at "
+            "FROM shared_reports WHERE user_id = %s ORDER BY id ASC",
+            (uid,),
+        )
+        shared_reports = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute(
+            "SELECT channel, message, status, created_at "
+            "FROM notifications WHERE user_id = %s ORDER BY id ASC",
+            (uid,),
+        )
+        notifications = [dict(r) for r in cursor.fetchall()]
+    finally:
+        conn.close()
+
+    return {
+        "exported_at": datetime.now().isoformat(),
+        "account": dict(account) if account else {},
+        "profile": dict(profile) if profile else {},
+        "preferences": dict(preferences) if preferences else {},
+        "analyses": analyses,
+        "roadmap_progress": roadmap_progress,
+        "shared_reports": shared_reports,
+        "notifications": notifications,
+        "counts": {
+            "analyses": len(analyses),
+            "roadmap_progress": len(roadmap_progress),
+            "shared_reports": len(shared_reports),
+            "notifications": len(notifications),
+        },
+    }
+
+
 class DeleteAccountRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
 

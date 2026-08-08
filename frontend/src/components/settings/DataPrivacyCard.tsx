@@ -3,10 +3,11 @@ import { Section, DataAction } from './';
 
 type Props = {
   handleExportData: () => void;
+  exporting?: boolean;
   onClearHistory: (v: boolean) => void;
 };
 
-const DataPrivacyCard = ({ handleExportData, onClearHistory }: Props) => (
+const DataPrivacyCard = ({ handleExportData, exporting = false, onClearHistory }: Props) => (
   <Section
     icon={Database}
     title="Data & Privacy"
@@ -18,27 +19,32 @@ const DataPrivacyCard = ({ handleExportData, onClearHistory }: Props) => (
         icon={FileDown}
         iconColor="indigo"
         title="Export all data"
-        description="Download a JSON file with your profile, preferences, and analysis history."
+        description="Download a JSON file with your account, profile, preferences, analyses, roadmap progress, share links, and notifications."
         action={
           <button
             onClick={handleExportData}
+            disabled={exporting}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '5px',
               height: '34px', padding: '0 14px', borderRadius: 'var(--radius-md)',
               background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-              color: 'var(--color-text)', fontSize: '12px', fontWeight: 'var(--font-semibold)',
-              cursor: 'pointer', flexShrink: 0,
+              color: exporting ? 'var(--color-text-muted)' : 'var(--color-text)',
+              fontSize: '12px', fontWeight: 'var(--font-semibold)',
+              cursor: exporting ? 'default' : 'pointer', flexShrink: 0,
+              opacity: exporting ? 0.6 : 1,
             }}
             onMouseEnter={(e) => {
+              if (exporting) return;
               e.currentTarget.style.borderColor = 'var(--color-primary)';
               e.currentTarget.style.color = 'var(--color-primary)';
             }}
             onMouseLeave={(e) => {
+              if (exporting) return;
               e.currentTarget.style.borderColor = 'var(--color-border)';
               e.currentTarget.style.color = 'var(--color-text)';
             }}
           >
-            <Download size={13} /> Download
+            <Download size={13} /> {exporting ? 'Exporting…' : 'Download'}
           </button>
         }
       />
