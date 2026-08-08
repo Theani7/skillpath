@@ -582,6 +582,27 @@ def init_db():
             )
         """)
 
+        # --- Guard: never allow the last admin to be removed/demoted ---
+        # Application code checks this too, but that guard has been bypassed
+        # before. This is the database-level backstop.
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION ensure_admin_remains() RETURNS TRIGGER AS $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin') THEN
+                    RAISE EXCEPTION 'Refusing to leave the system with no admin account';
+                END IF;
+                RETURN NULL;
+            END;
+            $$ LANGUAGE plpgsql
+        """)
+        cursor.execute("DROP TRIGGER IF EXISTS trg_ensure_admin_remains ON users")
+        cursor.execute("""
+            CREATE CONSTRAINT TRIGGER trg_ensure_admin_remains
+            AFTER DELETE OR UPDATE OF role ON users
+            DEFERRABLE INITIALLY DEFERRED
+            FOR EACH ROW EXECUTE FUNCTION ensure_admin_remains()
+        """)
+
         # --- Indexes ---
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_data_user_id ON user_data(user_id)")
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_data_timestamp ON user_data("Timestamp")')

@@ -153,26 +153,27 @@ def get_feedback_stats(current_admin: dict = Depends(get_current_admin)):
     }
 
 
-@router.delete("/api/admin/users/{user_id}")
-def delete_admin_user(user_id: int, current_admin: dict = Depends(get_current_admin)):
+@router.delete("/api/admin/users/{analysis_id}")
+def delete_admin_resume_log(analysis_id: int, current_admin: dict = Depends(get_current_admin)):
+    """Delete a single resume analysis row (user_data.id).
+
+    This path is the resume-log view. It must NOT touch the users table -
+    the id here is a user_data row id, not a user account id.
+    """
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM user_data WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM refresh_tokens WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM user_profiles WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM user_preferences WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM subscriptions WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM shared_reports WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM login_attempts WHERE username = (SELECT username FROM users WHERE id = %s)", (user_id,))
-        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        cursor.execute("DELETE FROM user_roadmap_progress WHERE analysis_id = %s", (analysis_id,))
+        cursor.execute("DELETE FROM shared_reports WHERE analysis_id = %s", (analysis_id,))
+        cursor.execute("DELETE FROM user_data WHERE id = %s", (analysis_id,))
+        deleted = cursor.rowcount
         conn.commit()
-        invalidate_all_caches()
     finally:
         conn.close()
-    return {"status": "success", "message": f"User {user_id} deleted."}
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    log_audit_action(current_admin, "delete_resume_log", "user_data", analysis_id)
+    return {"status": "success", "message": f"Analysis {analysis_id} deleted."}
 
 
 @router.delete("/api/admin/feedback/{feedback_id}")
@@ -267,13 +268,18 @@ def update_user_status(user_id: int, body: StatusUpdate, current_admin: dict = D
 @router.delete("/api/admin/registered-users/{user_id}")
 def delete_registered_user(user_id: int, current_admin: dict = Depends(get_current_admin)):
     """Delete (ban) a registered user and cascade-delete their data."""
+    if user_id == current_admin.get("id"):
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         # Lock the row so the admin-count check can't race with a concurrent change
         cursor.execute("SELECT role FROM users WHERE id = %s FOR UPDATE", (user_id,))
         user = cursor.fetchone()
-        if user and user["role"] == "admin":
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user["role"] == "admin":
             cursor.execute("SELECT COUNT(*) as admin_count FROM users WHERE role = 'admin'")
             admin_count = cursor.fetchone()["admin_count"]
             if admin_count <= 1:
