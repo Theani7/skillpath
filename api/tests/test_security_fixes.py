@@ -36,12 +36,36 @@ class TestEnsureColumnWhitelist:
         conn.close()
 
 
+def _make_ooxml_zip(members):
+    """Build an in-memory ZIP containing the given member paths."""
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name in members:
+            z.writestr(name, "<x/>")
+    return buf.getvalue()
+
+
 class TestFileTypeDetection:
     def test_pdf_magic_bytes(self):
         assert _detect_filetype(b"%PDF-1.4 fake content", "test.pdf") == "pdf"
 
     def test_docx_magic_bytes(self):
-        assert _detect_filetype(b"PK\x03\x04 fake content", "test.docx") == "docx"
+        """A real OOXML package is accepted."""
+        assert _detect_filetype(_make_ooxml_zip(
+            ["[Content_Types].xml", "word/document.xml"]), "test.docx") == "docx"
+
+    def test_zip_prefix_alone_is_not_docx(self):
+        """PK\\x03\\x04 is the generic ZIP signature, not a DOCX signature.
+
+        xlsx/pptx/jar all start with it. Accepting them here means
+        docx.Document() later dies on a missing [Content_Types].xml, which
+        surfaces as a 500 instead of a 400.
+        """
+        assert _detect_filetype(b"PK\x03\x04 fake content", "test.docx") is None
+        assert _detect_filetype(_make_ooxml_zip(["xl/workbook.xml"]), "book.xlsx") is None
+        assert _detect_filetype(_make_ooxml_zip(["ppt/presentation.xml"]), "deck.pptx") is None
 
     def test_extension_fallback_removed(self):
         """Extension alone should not determine file type."""

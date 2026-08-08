@@ -208,21 +208,19 @@ def resend_verification(payload: ResendVerificationRequest, request: Request):
         if not user or int(user["email_verified"]) == 1:
             return {"status": "success", "message": "If your account needs verification, a new code has been sent."}
         email = user["email"]
+        # Age computed by Postgres - see the note in resend_otp; created_at is a
+        # naive local timestamp and must not be treated as UTC in Python.
         cursor.execute(
-            "SELECT created_at FROM otp_codes WHERE email = %s AND purpose = 'register' "
+            "SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) AS age_seconds "
+            "FROM otp_codes WHERE email = %s AND purpose = 'register' "
             "ORDER BY id DESC LIMIT 1",
             (email,),
         )
         last = cursor.fetchone()
-        if last:
-            try:
-                last_dt = datetime.fromisoformat(
-                    str(last["created_at"]).replace(" ", "T")
-                ).replace(tzinfo=timezone.utc)
-            except (ValueError, TypeError):
-                last_dt = None
-            if last_dt and (datetime.now(timezone.utc) - last_dt).total_seconds() < OTP_RESEND_COOLDOWN_SECONDS:
-                remaining = max(1, int(OTP_RESEND_COOLDOWN_SECONDS - (datetime.now(timezone.utc) - last_dt).total_seconds()))
+        if last and last["age_seconds"] is not None:
+            age = float(last["age_seconds"])
+            if age < OTP_RESEND_COOLDOWN_SECONDS:
+                remaining = max(1, int(OTP_RESEND_COOLDOWN_SECONDS - age))
                 raise HTTPException(
                     status_code=429,
                     detail=f"Please wait {remaining} seconds before requesting a new code.",
@@ -328,21 +326,20 @@ def resend_otp(payload: ResendOTPRequest, request: Request):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        # Let Postgres compute the age. created_at is a naive TIMESTAMP holding
+        # server-local wall clock, so comparing it against a UTC "now" in Python
+        # is off by the server's UTC offset - on a UTC+05:45 host the row looks
+        # ~5h45m in the future and the cooldown never expires.
         cursor.execute(
-            "SELECT created_at FROM otp_codes "
-            "WHERE email = %s AND purpose = %s ORDER BY id DESC LIMIT 1",
+            "SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) AS age_seconds "
+            "FROM otp_codes WHERE email = %s AND purpose = %s ORDER BY id DESC LIMIT 1",
             (payload.email, payload.purpose),
         )
         last = cursor.fetchone()
-        if last:
-            try:
-                last_dt = datetime.fromisoformat(
-                    str(last["created_at"]).replace(" ", "T")
-                ).replace(tzinfo=timezone.utc)
-            except (ValueError, TypeError):
-                last_dt = None
-            if last_dt and (datetime.now(timezone.utc) - last_dt).total_seconds() < OTP_RESEND_COOLDOWN_SECONDS:
-                remaining = max(1, int(OTP_RESEND_COOLDOWN_SECONDS - (datetime.now(timezone.utc) - last_dt).total_seconds()))
+        if last and last["age_seconds"] is not None:
+            age = float(last["age_seconds"])
+            if age < OTP_RESEND_COOLDOWN_SECONDS:
+                remaining = max(1, int(OTP_RESEND_COOLDOWN_SECONDS - age))
                 raise HTTPException(
                     status_code=429,
                     detail=f"Please wait {remaining} seconds before requesting a new code.",
@@ -629,20 +626,17 @@ def request_password_reset(payload: PasswordResetRequest, request: Request):
         cursor.execute("SELECT id FROM users WHERE email = %s", (payload.email,))
         user = cursor.fetchone()
         if user:
+            # Age computed by Postgres - see the note in resend_otp; created_at
+            # is a naive local timestamp and must not be treated as UTC.
             cursor.execute(
-                "SELECT created_at FROM otp_codes WHERE email = %s AND purpose = 'password_reset' "
+                "SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) AS age_seconds "
+                "FROM otp_codes WHERE email = %s AND purpose = 'password_reset' "
                 "ORDER BY id DESC LIMIT 1",
                 (payload.email,),
             )
             last = cursor.fetchone()
-            if last:
-                try:
-                    last_dt = datetime.fromisoformat(
-                        str(last["created_at"]).replace(" ", "T")
-                    ).replace(tzinfo=timezone.utc)
-                except (ValueError, TypeError):
-                    last_dt = None
-                if last_dt and (datetime.now(timezone.utc) - last_dt).total_seconds() < RESET_COOLDOWN_SECONDS:
+            if last and last["age_seconds"] is not None:
+                if float(last["age_seconds"]) < RESET_COOLDOWN_SECONDS:
                     return {"status": "success", "message": "If the email exists, a reset code has been sent."}
             otp = _generate_otp()
             delivery = _send_otp(payload.email, otp, "password_reset")

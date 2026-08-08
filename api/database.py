@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import psycopg2
 import psycopg2.extras
 import psycopg2.pool
+from psycopg2 import sql
 
 from api.seed_defaults import (
     CORE_SKILLS_BY_ROLE,
@@ -135,12 +136,20 @@ def _ensure_column(cursor, table: str, col: str, typedef: str, default=None) -> 
         "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
         (table,),
     )
-    existing = {row["column_name"] for row in cursor.fetchall()}
-    if col not in existing:
-        if default is not None:
-            cursor.execute(f'ALTER TABLE {table} ADD COLUMN "{col}" {typedef} DEFAULT {default}')
-        else:
-            cursor.execute(f'ALTER TABLE {table} ADD COLUMN "{col}" {typedef}')
+    # Callers may pass a plain cursor or a RealDictCursor, so handle both
+    # rather than assuming dict-style rows.
+    existing = {
+        (row["column_name"] if isinstance(row, dict) else row[0])
+        for row in cursor.fetchall()
+    }
+    if col in existing:
+        return
+    stmt = sql.SQL("ALTER TABLE {} ADD COLUMN {} ").format(
+        sql.Identifier(table), sql.Identifier(col)
+    ) + sql.SQL(typedef)
+    if default is not None:
+        stmt = stmt + sql.SQL(" DEFAULT ") + sql.Literal(default)
+    cursor.execute(stmt)
 
 
 def init_db():
