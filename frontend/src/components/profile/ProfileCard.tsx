@@ -39,7 +39,7 @@ const validateField = (field: string, value: string): string | undefined => {
     case 'phone':
       if (!/^[+]?[\d\s().-]+$/.test(value)) return 'Only digits, spaces, +, -, (, ) allowed';
       if (value.replace(/\D/g, '').length < 7) return 'Phone number too short';
-      if (value.replace(/\D/g, '').length > 15) return 'Phone number too long';
+      if (value.replace(/\D/g, '').length > 10) return 'Phone number cannot exceed 10 digits';
       break;
     case 'experience_years':
       if (!/^\d*\.?\d*$/.test(value)) return 'Must be a number';
