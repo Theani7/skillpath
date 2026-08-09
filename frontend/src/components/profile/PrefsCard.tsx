@@ -66,12 +66,14 @@ const PrefsCard = ({ preferences, prefsDraft, editingPrefs, savingPrefs, setEdit
               value={prefsDraft.timeline_months}
               onChange={(v: string | number) => setPrefsDraft({ ...prefsDraft, timeline_months: v as number })}
               placeholder="6"
+              min={1}
             />
             <EditableField
               label="Salary Target (USD)" icon={DollarSign} type="number"
               value={prefsDraft.salary_target}
               onChange={(v: string | number) => setPrefsDraft({ ...prefsDraft, salary_target: v as number })}
               placeholder="120000"
+              min={0}
             />
           </div>
         </motion.div>

@@ -32,15 +32,17 @@ type EditableFieldProps = {
   focusStyles?: React.CSSProperties;
   pattern?: string;
   maxLength?: number;
+  min?: number;
   error?: string;
 };
 
-export const EditableField = ({ label, value, onChange, icon: Icon, type = 'text', placeholder, as = 'input', focusStyles, pattern, maxLength, error }: EditableFieldProps) => {
+export const EditableField = ({ label, value, onChange, icon: Icon, type = 'text', placeholder, as = 'input', focusStyles, pattern, maxLength, min, error }: EditableFieldProps) => {
   const [focus, setFocus] = useState(false);
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const v = e.target.value;
     if (maxLength && v.length > maxLength) return;
     if (pattern && v && !new RegExp(pattern).test(v)) return;
+    if (min !== undefined && v && Number(v) < min) return;
     onChange(v);
   };
   const borderColor = error ? 'var(--color-error)' : focus ? 'var(--color-primary)' : 'var(--color-border)';
@@ -65,6 +67,7 @@ export const EditableField = ({ label, value, onChange, icon: Icon, type = 'text
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
           placeholder={placeholder}
+          min={min}
           style={{ ...fieldStyle(focus), ...focusStyles, borderColor }}
         />
       )}
