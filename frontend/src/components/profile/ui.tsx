@@ -30,33 +30,46 @@ type EditableFieldProps = {
   placeholder?: string;
   as?: 'input' | 'textarea';
   focusStyles?: React.CSSProperties;
+  pattern?: string;
+  maxLength?: number;
+  error?: string;
 };
 
-export const EditableField = ({ label, value, onChange, icon: Icon, type = 'text', placeholder, as = 'input', focusStyles }: EditableFieldProps) => {
+export const EditableField = ({ label, value, onChange, icon: Icon, type = 'text', placeholder, as = 'input', focusStyles, pattern, maxLength, error }: EditableFieldProps) => {
   const [focus, setFocus] = useState(false);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const v = e.target.value;
+    if (maxLength && v.length > maxLength) return;
+    if (pattern && v && !new RegExp(pattern).test(v)) return;
+    onChange(v);
+  };
+  const borderColor = error ? 'var(--color-error)' : focus ? 'var(--color-primary)' : 'var(--color-border)';
   return (
     <div>
       <label style={labelStyle}>{Icon && <Icon size={12} />} {label}</label>
       {as === 'textarea' ? (
         <textarea
           value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={handleChange}
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
           placeholder={placeholder}
           rows={3}
-          style={{ ...textareaStyle(focus), ...focusStyles }}
+          style={{ ...textareaStyle(focus), ...focusStyles, borderColor }}
         />
       ) : (
         <input
           type={type}
           value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={handleChange}
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
           placeholder={placeholder}
-          style={{ ...fieldStyle(focus), ...focusStyles }}
+          style={{ ...fieldStyle(focus), ...focusStyles, borderColor }}
         />
+      )}
+      {error && (
+        <div style={{ fontSize: '11px', color: 'var(--color-error)', marginTop: '4px' }}>{error}</div>
       )}
     </div>
   );

@@ -1879,20 +1879,8 @@ select.input {
 
 .analysis-breakdown-cards {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
-}
-
-@media (max-width: 900px) {
-  .analysis-breakdown-cards {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 540px) {
-  .analysis-breakdown-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 .analysis-breakdown-item {

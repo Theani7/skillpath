@@ -1,8 +1,9 @@
 # SkillPath.ai — Complete Technical Documentation
 
-> **Version:** 2.0 (Post-Migration)
-> **Last Updated:** 2026-08-06
-> **Status:** Production-Ready MVP
+> **Version:** 2.1
+> **Last Updated:** 2026-08-08
+> **Status:** MVP — see Section 5.6 (no migrations) and Section 9 (unauthenticated
+> AI interview routes) for the two known gaps before production.
 
 ---
 
@@ -75,8 +76,8 @@ SkillPath is a full-stack SaaS platform that analyzes resumes using NLP and Gene
               ┌──────────────┼──────────────┐
               ▼              ▼              ▼
      ┌────────────┐  ┌────────────┐  ┌────────────┐
-     │ SQLite /   │  │ Gemini API │  │ OpenAI-    │
-     │ PostgreSQL │  │ (Google)   │  │ Compatible │
+     │ PostgreSQL │  │ Gemini API │  │ OpenAI-    │
+     │ (psycopg2) │  │ (Google)   │  │ Compatible │
      └────────────┘  └────────────┘  └────────────┘
 ```
 
@@ -150,12 +151,11 @@ User Uploads Resume
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Python | 3.9+ | Runtime |
+| Python | 3.9+ | Runtime (CI matrix: 3.9, 3.11, 3.12) |
 | FastAPI | 0.115+ | Web framework |
-| Uvicorn | — | ASGI server |
-| SQLite / PostgreSQL | — | Database (dual support via `DATABASE_URL`) |
-| SQLAlchemy | 2.0+ | ORM + schema definitions |
-| Alembic | 1.13+ | Database migrations |
+| Uvicorn | 0.32+ | ASGI server |
+| PostgreSQL | 16 | Database — **required**, no SQLite fallback |
+| psycopg2-binary | 2.9+ | PostgreSQL adapter with `ThreadedConnectionPool` |
 | PyJWT | 2.10+ | JWT token management |
 | bcrypt | 4.2+ | Password hashing |
 | Google Generative AI | 0.8+ | Gemini API (optional) |
@@ -165,7 +165,6 @@ User Uploads Resume
 | spacy | 3.7+ | Named entity recognition |
 | rapidfuzz | 3.9+ | Fuzzy string matching |
 | python-dateutil | 2.9+ | Flexible date parsing |
-| psycopg2-binary | 2.9+ | PostgreSQL adapter (optional) |
 | httpx | 0.28+ | Async HTTP client |
 | beautifulsoup4 | 4.12+ | HTML parsing |
 | pytest | 8.0+ | Test framework |
@@ -186,9 +185,7 @@ User Uploads Resume
 skillpath.ai/
 ├── api/                                # Backend (FastAPI)
 │   ├── main.py                         # App entry, middleware, CORS, router registration
-│   ├── database.py                     # DB connections, init, migrations entry
-│   ├── models.py                       # SQLAlchemy table definitions (38 tables)
-│   ├── db_compat.py                    # SQLite/PostgreSQL compatibility layer
+│   ├── database.py                     # Connection pool + init_db() (all 38 CREATE TABLE stmts)
 │   ├── auth.py                         # JWT creation/validation, auth dependencies
 │   ├── security.py                     # Password hashing (bcrypt)
 │   ├── exceptions.py                   # Custom exceptions
@@ -196,12 +193,10 @@ skillpath.ai/
 │   ├── resume_parser.py                # Local fallback resume parsing
 │   ├── parser_enhancements.py          # spaCy + rapidfuzz + dateutil enhancements
 │   ├── resume_patterns.py              # Regex/keyword patterns for parsing
-│   ├── career_services.py              # Resume scoring, skill analysis
-│   ├── skill_matching.py               # Skill matching helpers
-│   ├── job_hunt_services.py            # Job matching, JD comparison
-│   ├── roadmap_services.py             # Roadmap generation logic
+│   ├── career_services.py              # Resume scoring, skill analysis, candidate ranking
+│   ├── skill_matching.py               # Skill matching, JD comparison, gap prioritisation
+│   ├── roadmap_services.py             # Roadmap generation, project recommendations
 │   ├── ai_provider.py                  # Gemini + OpenAI-compatible provider chain
-│   ├── local_llm.py                    # [REMOVED] Local Qwen2 model integration
 │   ├── email_service.py                # SMTP delivery (OTP, password reset)
 │   ├── mock_interview.py               # Static interview questions
 │   ├── mock_interview_ai.py            # AI-generated interview sessions
@@ -262,75 +257,247 @@ skillpath.ai/
 │   │   └── styles/
 │   │       ├── theme.css               # Design tokens + global styles
 │   │       └── animations.css          # Keyframe animations
+│   ├── src/test/
+│   │   ├── setup.ts                    # jsdom setup (matchMedia, scrollIntoView stubs)
+│   │   └── apiContract.test.ts         # Greps Python routes to catch field-name drift
+│   ├── e2e/                            # Playwright specs (auth, analyzer, admin, interview)
+│   │   └── fixtures.ts                 # Network-layer /api/** stubs (no backend needed)
+│   ├── playwright.config.ts
 │   ├── tsconfig.json
 │   └── package.json
 │
-├── alembic/                            # Database migrations
-│   ├── env.py                          # Migration environment config
-│   ├── script.py.mako                  # Migration template
-│   └── versions/
-│       └── 001_initial_schema.py       # Initial schema migration
-│
-├── alembic.ini                         # Alembic configuration
-├── docker-compose.yml                  # PostgreSQL service for local development
+├── .github/workflows/ci.yml            # CI: frontend, e2e, backend matrix, analysis, release
+├── docker-compose.yml                  # Postgres 16 + backend + frontend
+├── Dockerfile.backend / Dockerfile.frontend
 ├── pytest.ini                          # Pytest configuration
 ├── package.json                        # Root scripts (setup, dev, build)
 ├── .env.example                        # Environment variable template
 └── venvapp/                            # Python virtual environment (local only)
 ```
 
+> **Note:** `alembic.ini` exists at the repo root but is **not wired up** — there is no
+> `alembic/` directory and Alembic is not in `requirements.txt`. Schema is created by
+> `init_db()` in `database.py`, which runs at import time (`database.py:753`).
+> See [Section 5.6](#56-schema-management) for the implications.
+
 ---
 
 ## 5. Database Schema
 
-### Dual Database Support
-- **SQLite** (`api/cv.db`) — Default for local development
-- **PostgreSQL** — Production via `DATABASE_URL` env var
-- **Alembic** migrations auto-applied on boot
-- **Compatibility layer** (`db_compat.py`) handles SQL dialect differences
+### 5.1 Overview
 
-### All 40 Tables
+- **Engine:** PostgreSQL 16 only. `DATABASE_URL` is **required** — `_get_pool()` raises
+  `RuntimeError` if it is unset. There is no SQLite fallback and no dialect
+  compatibility layer.
+- **Source of truth:** `api/database.py`, function `init_db()` (lines 155–614).
+  All 38 tables are created there with `CREATE TABLE IF NOT EXISTS`.
+- **Access pattern:** `psycopg2` `ThreadedConnectionPool` with `RealDictCursor`,
+  so every row behaves like a dict.
+- **Table count:** 38.
 
-| Table | Purpose | Key Columns |
-|-------|---------|-------------|
-| `users` | User accounts | username, email, hashed_password, role, is_active, email_verified |
-| `user_data` | Resume analysis history | analysis_data (JSON), resume_score, target_role, content_hash |
-| `user_feedback` | User feedback | feed_name, feed_email, feed_score (1-5), comments |
-| `user_profiles` | Extended profile | full_name, phone, location, bio, linkedin_url, github_url |
-| `user_preferences` | Career preferences | target_role, timeline_months, salary_target, locale |
-| `refresh_tokens` | JWT refresh tokens | token (SHA-256 hash), user_id, expires_at |
-| `otp_codes` | Email OTPs | email, purpose, code_hash, expires_at, attempts, used |
-| `password_reset_tokens` | Password reset | token, user_id, expires_at, used |
-| `login_attempts` | Failed login tracking | username, attempts, first_attempt, locked_until |
-| `analysis_cache` | Analysis cache | (content_hash, target_role) composite PK, result_json, expires_at |
-| `rate_limits` | Rate limit buckets | key, count, updated_at |
-| `request_logs` | Request logging | request_id, method, path, status_code, elapsed_ms |
-| `courses` | Course recommendations | field, course_name, course_url, platform, rating, duration |
-| `job_roles` | Job roles | title, description, category, is_active |
-| `job_role_skills` | Skills per role | job_role_id, skill_name, is_required |
-| `career_roadmaps` | Role roadmaps | job_role_id, title, description, duration_weeks |
-| `roadmap_steps` | Roadmap steps | roadmap_id, step_number, title, skills, resources |
-| `skill_categories` | Skill taxonomy | name, description |
-| `skills` | Individual skills | category_id, name |
-| `role_synonyms` | Role → category | role_fragment, category_name |
-| `skill_aliases` | Skill aliases | alias, canonical_name |
-| `field_keywords` | Field prediction | field_name, keyword, weight |
-| `industry_trends` | Market trends | field_name, trend_type, data (JSON) |
-| `market_role_aliases` | Role → field | role_name, field_name |
-| `skill_recommendations` | Skill recs | field_name, skill_name, priority |
-| `roadmap_templates` | Roadmap templates | field_name, template_data (JSON) |
-| `learning_actions` | Learning actions | skill_name, action_text |
-| `learning_resources` | Learning resources | skill_name, resource_type, title, url |
-| `skill_difficulty` | Skill difficulty | skill_name, difficulty (1-3) |
-| `skill_clusters` | Skill clusters | cluster_name, skills (JSON) |
-| `video_resources` | Video resources | skill_name, video_type, title, url |
-| `role_configs` | Role config | role_name, config_data (JSON) |
-| `market_trends_cache` | Market data cache | field, source, payload, fetched_at |
-| `shared_reports` | Share links | token, user_id, analysis_id, expires_at, is_public |
-| `notifications` | Notifications | user_id, channel, message, status, send_at |
-| `subscriptions` | Billing | user_id, plan, status, renews_at |
-| `audit_logs` | Admin audit | admin_user_id, action, target_type, details, ip_address |
-| `user_roadmap_progress` | Roadmap progress | user_id, analysis_id, phase_index, task_index, completed |
+### 5.2 Entity Relationship Diagram
+
+Only tables with real foreign keys are shown. Reference/lookup tables
+(Section 5.5) are standalone and joined by string value, not by key.
+
+```mermaid
+erDiagram
+    users ||--o| user_profiles       : "has one"
+    users ||--o| user_preferences    : "has one"
+    users ||--o| subscriptions       : "has one"
+    users ||--o{ notifications       : "receives"
+    users ||--o{ user_roadmap_progress : "tracks"
+    users ||--o{ refresh_tokens      : "holds (by user_id, no FK)"
+    users ||--o{ user_data           : "uploads (by user_id, no FK)"
+    user_data ||--o{ shared_reports  : "shared as (by analysis_id, no FK)"
+
+    job_roles ||--o{ job_role_skills : "requires"
+    job_roles ||--o{ career_roadmaps : "has"
+    career_roadmaps ||--o{ roadmap_steps : "contains"
+
+    skill_categories ||--o{ skills   : "groups"
+
+    users {
+        bigserial id PK
+        varchar username UK
+        varchar email UK
+        varchar hashed_password
+        text role "CHECK admin|user"
+        int is_active
+        int email_verified
+    }
+    user_data {
+        bigserial ID PK
+        int user_id "default -1 = anonymous"
+        varchar content_hash
+        varchar resume_score
+        text analysis_data "full JSON"
+        varchar target_role
+    }
+    job_roles {
+        bigserial id PK
+        varchar title
+        varchar category
+        int is_active
+    }
+    job_role_skills {
+        bigserial id PK
+        int job_role_id FK
+        varchar skill_name
+        int is_required "1 = core, scores 2x"
+    }
+    career_roadmaps {
+        bigserial id PK
+        int job_role_id FK
+        varchar title
+        int duration_weeks
+    }
+    roadmap_steps {
+        bigserial id PK
+        int roadmap_id FK
+        int step_number
+        text skills
+    }
+    skill_categories {
+        bigserial id PK
+        varchar name UK
+    }
+    skills {
+        bigserial id PK
+        int category_id FK
+        varchar name
+    }
+```
+
+**Two things the diagram makes visible:**
+
+1. **`user_data` has no foreign key to `users`.** It stores `user_id INTEGER DEFAULT -1`,
+   where `-1` means anonymous. This is deliberate — analyses survive account deletion —
+   but it also means deleting a user leaves orphaned rows that no cascade cleans up.
+2. **`refresh_tokens`, `password_reset_tokens` and `shared_reports` also lack FKs.**
+   They reference `user_id` by value only, so expired rows are cleaned by application
+   code, not by the database.
+
+### 5.3 Cascade behaviour (data deletion)
+
+Seven tables declare `ON DELETE CASCADE`, so `DELETE FROM users` cleans them
+automatically. Everything else must be deleted explicitly.
+
+| Cascades automatically | Must be deleted by application code |
+|---|---|
+| `user_profiles` | `user_data` (no FK, `user_id` default −1) |
+| `user_preferences` | `refresh_tokens` (no FK) |
+| `subscriptions` | `password_reset_tokens` (no FK) |
+| `notifications` | `shared_reports` (no FK) |
+| `user_roadmap_progress` | `otp_codes` (keyed by email, not user_id) |
+| `skills` (via `skill_categories`) | `login_attempts` (keyed by username) |
+| `job_role_skills`, `career_roadmaps`, `roadmap_steps` (via `job_roles`) | `audit_logs` (retained intentionally) |
+
+### 5.4 Core tables
+
+#### Users & Authentication
+
+| # | Table | Primary Key | Type | Notes |
+|---|-------|-------------|------|-------|
+| 1 | `users` | `id` | BIGSERIAL | `username`, `email` UNIQUE; `CHECK role IN ('admin','user')` |
+| 2 | `user_profiles` | `user_id` | INTEGER | FK → users, CASCADE. Note the column is `current_job_role`, **not** `current_role` (reserved word in Postgres) |
+| 3 | `user_preferences` | `user_id` | INTEGER | FK → users, CASCADE |
+| 4 | `refresh_tokens` | `token` | VARCHAR(64) | SHA-256 hash of the JWT, never the raw token |
+| 5 | `password_reset_tokens` | `token` | VARCHAR(128) | `used` flag enforces single use |
+| 6 | `otp_codes` | `id` | BIGSERIAL | `code_hash` SHA-256; `attempts` caps brute force |
+| 7 | `login_attempts` | `username` | VARCHAR(100) | `locked_until` epoch drives lockout |
+| 8 | `subscriptions` | `user_id` | INTEGER | FK → users, CASCADE. Schema only — no billing integration yet |
+
+#### Resume Analysis
+
+| # | Table | Primary Key | Type | Notes |
+|---|-------|-------------|------|-------|
+| 9 | `user_data` | `ID` | BIGSERIAL | Uppercase `ID`, and quoted mixed-case columns (`"Name"`, `"Email_ID"`, `"Predicted_Field"`). Postgres folds unquoted identifiers to lowercase, so API responses return `id` — this caused a production bug in the admin tables |
+| 10 | `analysis_cache` | `(content_hash, target_role)` | VARCHAR(64), VARCHAR(200) | **Composite PK** — the same resume for a different role is a different result. `expires_at` gives a 7-day TTL |
+| 11 | `shared_reports` | `id` | BIGSERIAL | `token` UNIQUE; `expires_at` + `is_public` gate access |
+| 12 | `user_feedback` | `ID` | BIGSERIAL | `CHECK feed_score BETWEEN 1 AND 5` |
+
+#### Job Roles & Skills
+
+| # | Table | Primary Key | Type | Notes |
+|---|-------|-------------|------|-------|
+| 13 | `job_roles` | `id` | BIGSERIAL | Admin-managed; `is_active` soft-deletes |
+| 14 | `job_role_skills` | `id` | BIGSERIAL | FK → job_roles, CASCADE. `is_required` drives the 2× score weighting |
+| 15 | `skill_categories` | `id` | BIGSERIAL | `name` UNIQUE |
+| 16 | `skills` | `id` | BIGSERIAL | FK → skill_categories, CASCADE. UNIQUE `(category_id, name)` |
+
+#### Roadmaps & Progress
+
+| # | Table | Primary Key | Type | Notes |
+|---|-------|-------------|------|-------|
+| 17 | `career_roadmaps` | `id` | BIGSERIAL | FK → job_roles, CASCADE |
+| 18 | `roadmap_steps` | `id` | BIGSERIAL | FK → career_roadmaps, CASCADE |
+| 19 | `user_roadmap_progress` | `id` | BIGSERIAL | FK → users, CASCADE. Has both a table constraint and a partial unique index using `COALESCE(analysis_id, -1)`, because SQL `UNIQUE` treats NULLs as distinct and would otherwise allow duplicate rows |
+
+#### Operations
+
+| # | Table | Primary Key | Type | Notes |
+|---|-------|-------------|------|-------|
+| 20 | `rate_limits` | `key` | VARCHAR(100) | Key is `ip:minute`; incremented via atomic `ON CONFLICT ... RETURNING count` |
+| 21 | `request_logs` | `id` | BIGSERIAL | Written by a background batch consumer, never inline |
+| 22 | `audit_logs` | `id` | BIGSERIAL | Admin action trail; deliberately survives user deletion |
+| 23 | `notifications` | `id` | BIGSERIAL | FK → users, CASCADE |
+| 24 | `courses` | `id` | BIGSERIAL | Course catalogue with rating, price, platform |
+| 25 | `market_trends_cache` | `field` | VARCHAR(200) | External market API payload, keyed by field |
+
+### 5.5 Reference / lookup tables
+
+These hold seed data that drives parsing and recommendations. They have no
+foreign keys — they are joined by string value (`field_name`, `skill_name`,
+`role_key`), which is why `skill_aliases` exists to normalise spelling first.
+
+| # | Table | Primary Key | Unique Constraint | Purpose |
+|---|-------|-------------|-------------------|---------|
+| 26 | `skill_aliases` | `id` | `alias` | "JS" → "JavaScript". Column is `canonical_skill` |
+| 27 | `role_synonyms` | `id` | `role_key` | Role name → categories. Columns are `role_key`, `categories` |
+| 28 | `field_keywords` | `id` | `(field_name, keyword)` | Weighted keywords for field prediction |
+| 29 | `skill_difficulty` | `id` | `skill_name` | Level 1–3, orders roadmap phases |
+| 30 | `skill_clusters` | `id` | `(cluster_name, skill_name)` | Related-skill grouping |
+| 31 | `skill_recommendations` | `id` | `(field_name, skill_name)` | Suggested skills per field |
+| 32 | `roadmap_templates` | `id` | `(field_name, step_number)` | Default roadmap steps per field |
+| 33 | `learning_actions` | `id` | `(skill_name, action_text)` | "Do this" items per skill |
+| 34 | `learning_resources` | `id` | `(skill_name, title)` | Links and articles per skill |
+| 35 | `video_resources` | `id` | `(field_name, video_type, url)` | Video tutorials per field |
+| 36 | `industry_trends` | `id` | `(field_name, trend_type)` | Trend payloads per field |
+| 37 | `market_role_aliases` | `id` | `alias` | Job-board title → internal field |
+| 38 | `role_configs` | `id` | `role_key` | Project types, interview focus, key tools |
+
+### 5.6 Schema management
+
+There are **no migrations**. `init_db()` runs on import (`database.py:753`) and
+creates any missing table via `CREATE TABLE IF NOT EXISTS`.
+
+A helper for additive column changes exists — `_ensure_column(cursor, table, col,
+typedef, default)` at `database.py:132-154`. It checks `information_schema.columns`
+and issues `ALTER TABLE ADD COLUMN` when the column is absent, and validates the
+table name against an `ALLOWED_TABLES` whitelist to prevent SQL injection through
+the identifier. It currently has **no production call sites** — it is exercised only
+by `test_security_fixes.py`, so it is available for the next additive change rather
+than in active use.
+
+**What this handles:** new tables, and new columns if `_ensure_column` is called.
+
+**What it does not handle:** changing a column type, renaming, dropping,
+backfilling data, or rolling anything back. With 38 tables that is a real
+constraint — `alembic.ini` is present at the repo root but unused, which
+suggests migrations were started and never finished. Adopting Alembic is the
+recommended next step before any destructive schema change.
+
+### 5.7 Integrity guards
+
+Beyond primary and foreign keys:
+
+| Guard | Where | Purpose |
+|-------|-------|---------|
+| `CHECK role IN ('admin','user')` | `users` | Invalid roles rejected by the database |
+| `CHECK feed_score BETWEEN 1 AND 5` | `user_feedback` | Rating bounds |
+| `trg_ensure_admin_remains` | `users`, `database.py:618-638` | `CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED` on `AFTER DELETE OR UPDATE OF role`. Raises if no admin would remain. Deferred so it evaluates at commit, allowing a legitimate admin swap inside one transaction. The application checks this too, but that guard has been bypassed before |
+| `idx_roadmap_progress_unique` | `user_roadmap_progress` | `COALESCE(analysis_id, -1)` closes the NULL-duplicate hole |
 
 ---
 
@@ -346,8 +513,11 @@ skillpath.ai/
    - PDF: `%PDF` (hex: `25 50 44 46`)
    - DOCX: `PK\x03\x04` (hex: `50 4B 03 04`)
 3. Extension is NOT trusted — only magic bytes determine file type
+4. DOCX requires a second check: `PK\x03\x04` is the generic ZIP signature shared by
+   xlsx, pptx, jar and plain .zip, so the archive is opened and must contain both
+   `[Content_Types].xml` and `word/document.xml` to qualify
 
-**Code Location:** `api/routes/analysis.py:140-165`
+**Code Location:** `api/routes/analysis.py:52-69` (`_detect_filetype`), called at line 83
 
 ### 6.2 Text Extraction
 
@@ -471,10 +641,10 @@ max: 100
 
 **Provider Order** (from `AI_PROVIDERS` env, default: `gemini,openai`):
 
-1. **GeminiProvider** (`gemini-2.0-flash` model)
+1. **GeminiProvider** (`gemini-2.0-flash`, set at `ai_provider.py:32`)
    - Uses `google.generativeai`
    - Structured JSON output with schema enforcement
-   - Temperature: 0.1
+   - Default temperature: 0.2 for JSON, 0.7 for chat
 
 2. **OpenAICompatibleProvider**
    - Uses `httpx` for HTTP calls
@@ -491,7 +661,9 @@ max: 100
 ### 6.5 Caching
 
 **Cache Key:** `(content_hash, target_role)`
-- `content_hash` = SHA-256 of file content
+- `content_hash` = SHA-256 of `f"{_CACHE_VERSION}:"` + file bytes. Bumping
+  `_CACHE_VERSION` (`analysis.py:30`, currently **3**) invalidates every entry at once,
+  which is how scoring changes are rolled out without a manual purge.
 - `target_role` = requested role (or None)
 
 **TTL:** 7 days
@@ -720,10 +892,16 @@ Content-Security-Policy: default-src 'self'; script-src 'self';
 |--------|----------|-------------|------|
 | GET | `/api/mock-interview` | List roles | No |
 | GET | `/api/mock-interview/{role}` | Get questions | No |
-| POST | `/api/mock-interview/start` | Start AI interview | Yes |
-| POST | `/api/mock-interview/answer` | Submit answer | Yes |
-| GET | `/api/mock-interview/session/{id}` | Get session | Yes |
-| POST | `/api/mock-interview/finish/{id}` | End session | Yes |
+| POST | `/api/mock-interview/start` | Start AI interview | **No** ⚠️ |
+| POST | `/api/mock-interview/answer` | Submit answer | **No** ⚠️ |
+| GET | `/api/mock-interview/session/{id}` | Get session | **No** ⚠️ |
+| POST | `/api/mock-interview/finish/{id}` | End session | **No** ⚠️ |
+
+> ⚠️ **Known gap:** the AI interview routes in `api/mock_interview_ai.py` declare no
+> `Depends(get_current_user)` and the router has no dependency, so they are
+> **publicly reachable** and each call spends AI provider quota. Sessions are also held
+> in a module-level `_sessions = {}` dict (`mock_interview_ai.py:45`), so they are lost
+> on restart and not shared across workers. Both should be fixed before production.
 
 ### User Endpoints
 
@@ -1058,25 +1236,61 @@ THEIRSTACK_API_KEY=your_key
 
 ### 13.1 Test Suite Overview
 
-**Framework:** pytest 8.0+
-**Total Tests:** 74
-**Location:** `api/tests/`
+**Total: 131 tests across three layers.**
+
+| Layer | Count | Framework | Location |
+|-------|-------|-----------|----------|
+| Backend | 75 | pytest 8.0+ | `api/tests/` |
+| Frontend unit | 40 | Vitest + React Testing Library (jsdom) | `frontend/src/**/*.test.tsx` |
+| End-to-end | 16 | Playwright (chromium) | `frontend/e2e/` |
 
 ### 13.2 Test Files
 
+**Backend** (`api/tests/`):
+
 | File | Tests | Focus |
 |------|-------|-------|
-| `test_features.py` | 30 | Resume parser, scoring, skill matching |
-| `test_integration.py` | 34 | API endpoints, auth flows |
+| `test_integration.py` | 36 | API endpoints, auth flows |
+| `test_features.py` | 29 | Resume parser, scoring, skill matching |
 | `test_security_fixes.py` | 10 | Security regression tests |
+
+**Frontend** (`frontend/src/`):
+
+| File | Focus |
+|------|-------|
+| `test/apiContract.test.ts` | Reads the Python route files and asserts frontend field names still match the backend. Exists because two production bugs came from drift the type checker cannot see across HTTP: admin tables keyed on `ID` when Postgres returns `id`, and `current_role` vs `current_job_role` |
+| `pages/Analyzer.test.tsx` | Upload, drag-drop, error handling |
+| `context/AuthContext.test.tsx` | Session bootstrap and 401 handling |
+| `components/interview/AiInterviewMode.test.tsx` | Question rendering, failure recovery |
+| `components/admin/DataTable.test.tsx` | Admin table rendering |
+| `components/profile/HistoryList.test.tsx` | Analysis history |
+| `components/ErrorBoundary.test.tsx` | Render-error recovery |
+| `services/api.test.ts` | Axios interceptor behaviour |
+
+**E2E** (`frontend/e2e/`): `auth.spec.ts`, `analyzer.spec.ts`, `admin.spec.ts`,
+`interview.spec.ts`. All `/api/**` calls are stubbed at the network layer via
+`fixtures.ts`, so no backend or database is required.
 
 ### 13.3 Test Environment
 
-**Configuration** (`conftest.py`):
-- Temporary SQLite database (per test session)
+**Backend** (`conftest.py`):
+- PostgreSQL test database via `TEST_DATABASE_URL`
+  (default `postgresql://postgres@localhost:5432/skillpath_test`)
 - SMTP disabled (no real emails)
-- Gemini API key disabled
+- AI provider keys disabled
 - ENV=development
+
+```bash
+createdb skillpath_test
+python -m pytest api/tests/      # from the repo root
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm test              # 40 unit tests
+npm run test:e2e      # 16 Playwright tests
+```
 
 **Isolation:**
 - Each test class gets fresh database state
@@ -1125,8 +1339,7 @@ pip install -r api/requirements.txt
 # Download spaCy model
 python -m spacy download en_core_web_sm
 
-# Run migrations (auto on boot)
-# Start server
+# Tables are created by init_db() on import - no migration step
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -1153,14 +1366,29 @@ npm run build
 
 ### 14.4 Docker Support
 
-**docker-compose.yml** includes:
-- PostgreSQL 16 service
-- Environment variables for DB connection
+**docker-compose.yml** defines three services:
+- `db` — PostgreSQL 16 Alpine with a `pg_isready` health check and a named volume
+- `backend` — built from `Dockerfile.backend`, waits for `db` to be healthy,
+  health-checked on `/api/health`
+- `frontend` — built from `Dockerfile.frontend`
 
 ```bash
-docker compose up -d db
+docker compose up -d          # full stack
+docker compose up -d db       # database only, run the app locally
 DATABASE_URL=postgresql://skillpath:skillpath@localhost:5432/skillpath
 ```
+
+### 14.5 Continuous Integration
+
+`.github/workflows/ci.yml` defines five jobs:
+
+| Job | What it runs |
+|-----|--------------|
+| `frontend` | ESLint, `tsc --noEmit`, 40 Vitest tests, build |
+| `e2e` | Build, then 16 Playwright tests (chromium, cached browsers) |
+| `backend` | 75 pytest tests against a Postgres service container, matrix 3.9 / 3.11 / 3.12 |
+| `analysis` | Static analysis |
+| `release` | Artifact packaging and GitHub release |
 
 ---
 
@@ -1181,22 +1409,22 @@ DATABASE_URL=postgresql://skillpath:skillpath@localhost:5432/skillpath
 
 ## Appendix B: Role Configurations
 
-**22 Predefined Roles:**
-- Backend Engineer, Frontend Engineer, Full Stack Engineer
-- Data Scientist, Data Analyst, Data Engineer
-- DevOps Engineer, Cloud Engineer, SRE
-- Mobile Developer (iOS/Android)
-- ML Engineer, AI Engineer
-- Security Engineer, QA Engineer
-- Product Manager, Engineering Manager
-- UI/UX Designer, Technical Writer
+**22 predefined roles**, seeded from `api/seed_defaults.py`:
 
-**Each Role Has:**
-- 6 required (core) skills
-- 9 nice-to-have skills
-- 4-phase career roadmap
-- Project suggestions
-- Interview focus areas
+| Constant | Type | Entries |
+|----------|------|---------|
+| `DEFAULT_ROLES` | list | 22 |
+| `DEFAULT_ROLE_SKILLS` | dict | 22 |
+| `DEFAULT_ROADMAPS` | dict | 22 |
+| `CORE_SKILLS_BY_ROLE` | dict | 8 |
+
+Covering backend, frontend, full stack, data science/analysis/engineering,
+DevOps, cloud, SRE, mobile, ML/AI, security, QA, product, engineering
+management, UI/UX and technical writing.
+
+**Each role has:** a skill list split into required and nice-to-have
+(`job_role_skills.is_required`), a multi-phase roadmap, project suggestions
+and interview focus areas.
 
 ---
 

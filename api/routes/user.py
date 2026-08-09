@@ -15,14 +15,14 @@ router = APIRouter(prefix="/api/user", tags=["user"])
 
 
 class UserProfileUpdate(BaseModel):
-    full_name: str = Field(default="", max_length=200)
-    phone: str = Field(default="", max_length=20)
+    full_name: str = Field(default="", max_length=200, pattern=r"^[A-Za-zÀ-ÿ\s.'-]*$")
+    phone: str = Field(default="", max_length=20, pattern=r"^[+]?[\d\s().-]*$")
     location: str = Field(default="", max_length=200)
     bio: str = Field(default="", max_length=500)
     current_role: str = Field(default="", max_length=100)
-    experience_years: str = Field(default="", max_length=10)
-    linkedin_url: str = Field(default="", max_length=500)
-    github_url: str = Field(default="", max_length=500)
+    experience_years: str = Field(default="", max_length=10, pattern=r"^\d*\.?\d*$")
+    linkedin_url: str = Field(default="", max_length=500, pattern=r"^(|https?://(www\.)?linkedin\.com/.*)$")
+    github_url: str = Field(default="", max_length=500, pattern=r"^(|https?://(www\.)?github\.com/.*)$")
 
 
 class PreferencesInput(BaseModel):

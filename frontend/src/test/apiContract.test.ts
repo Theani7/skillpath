@@ -93,3 +93,20 @@ describe('API contract: user export completeness', () => {
     expect(settings).toContain('/api/user/export');
   });
 });
+
+describe('API contract: profile field validation', () => {
+  const userRoutes = read('api/routes/user.py');
+
+  it('phone field has a format pattern', () => {
+    expect(userRoutes).toMatch(/phone.*pattern/);
+  });
+
+  it('experience_years field has a numeric pattern', () => {
+    expect(userRoutes).toMatch(/experience_years.*pattern/);
+  });
+
+  it('URL fields have format patterns', () => {
+    expect(userRoutes).toMatch(/linkedin_url.*pattern/);
+    expect(userRoutes).toMatch(/github_url.*pattern/);
+  });
+});
