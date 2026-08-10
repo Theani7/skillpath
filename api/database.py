@@ -168,9 +168,14 @@ def init_db():
                 role TEXT NOT NULL,
                 is_active INTEGER DEFAULT 1,
                 email_verified INTEGER DEFAULT 1,
+                google_id VARCHAR(100) DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT ck_user_role CHECK (role IN ('admin', 'user'))
             )
+        """)
+
+        cursor.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(100) DEFAULT NULL
         """)
 
         cursor.execute("""

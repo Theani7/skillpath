@@ -18,6 +18,7 @@ from api.exceptions import SkillPathException
 from api.mock_interview import router as mock_interview_router
 from api.mock_interview_ai import router as mock_interview_ai_router
 from api.routes.auth import router as auth_router
+from api.routes.oauth import router as oauth_router
 from api.routes.analysis import router as analysis_router
 from api.routes.admin import router as admin_router
 from api.routes.health import router as health_router
@@ -163,6 +164,7 @@ Be specific to {role_title} - don't use generic advice."""
 app.include_router(mock_interview_ai_router)
 app.include_router(mock_interview_router)
 app.include_router(auth_router)
+app.include_router(oauth_router)
 app.include_router(analysis_router)
 app.include_router(admin_router)
 app.include_router(health_router)
