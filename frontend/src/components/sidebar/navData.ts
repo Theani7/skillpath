@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Sparkles, FileSearch, MessageSquare, BarChart3, Settings,
-  LayoutDashboard, Activity, Users, MessageSquareText, BookOpen, Briefcase, Database,
+  LayoutDashboard, Activity, Users, MessageSquareText, BookOpen, Briefcase, Database, PenTool,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -21,6 +21,7 @@ export const SECTIONS: NavSection[] = [
     items: [
       { path: '/app', icon: Sparkles, label: 'Resume Analyzer' },
       { path: '/analysis', icon: FileSearch, label: 'Latest Analysis' },
+      { path: '/cover-letter', icon: PenTool, label: 'Cover Letter' },
       { path: '/mock-interview', icon: MessageSquare, label: 'Mock Interview' },
     ],
   },

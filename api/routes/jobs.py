@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 from api.auth import get_current_optional_user, get_current_user
 from api.career_services import generate_interview_questions, generate_job_matches, rank_candidates
+from api.cover_letter import generate_cover_letter
+from api.database import get_db_connection
 from api.extractor import rewrite_resume_with_gemini, simulate_interview_turn
 from api.skill_matching import compare_resume_to_jd
 from api.roadmap_services import recommend_projects
@@ -55,6 +57,14 @@ class ProjectRecommendationRequest(BaseModel):
     missing_skills: list[str] = Field(default_factory=list, max_length=200)
 
 
+class CoverLetterRequest(BaseModel):
+    resume_data: dict = Field(..., description="Parsed resume data from analysis")
+    target_role: str = Field(..., max_length=200)
+    company_name: str = Field(default="", max_length=200)
+    job_description: str = Field(default="", max_length=20000)
+    hiring_manager: str = Field(default="", max_length=200)
+
+
 @router.post("/api/jobs/matches")
 def get_job_matches(payload: JobMatchRequest, current_user: dict = Depends(get_current_optional_user)):
     jobs = generate_job_matches(payload.target_role, payload.skills, payload.missing_skills)
@@ -101,6 +111,85 @@ def compare_jd(payload: JDCompareRequest, current_user: dict = Depends(get_curre
 def project_recommendations(payload: ProjectRecommendationRequest, current_user: dict = Depends(get_current_optional_user)):
     projects = recommend_projects(payload.target_role, payload.missing_skills)
     return {"target_role": payload.target_role, "projects": projects}
+
+
+@router.post("/api/cover-letter/generate")
+def cover_letter_generate(payload: CoverLetterRequest, current_user: dict = Depends(get_current_optional_user)):
+    user_info = _fetch_authenticated_user_info(current_user)
+
+    result = generate_cover_letter(
+        resume_data=payload.resume_data,
+        target_role=payload.target_role,
+        company_name=payload.company_name,
+        job_description=payload.job_description,
+        hiring_manager=payload.hiring_manager,
+        user_info=user_info,
+    )
+    return result
+
+
+def _fetch_authenticated_user_info(current_user: Optional[dict]) -> dict:
+    """Fetch the authenticated user's real info from DB.
+
+    Always prioritizes the logged-in user's data over resume data.
+    Resume is only used for skills/experience, never for personal info.
+    """
+    info = {
+        "name": "",
+        "email": "",
+        "phone": "",
+        "location": "",
+        "bio": "",
+        "current_role": "",
+        "experience_years": "",
+        "linkedin_url": "",
+        "github_url": "",
+    }
+    if not current_user:
+        return info
+
+    user_id = current_user.get("id")
+
+    info["name"] = current_user.get("full_name", "")
+    info["email"] = current_user.get("email", "")
+
+    if user_id:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT full_name, phone, location, bio,
+                       current_job_role, experience_years,
+                       linkedin_url, github_url
+                FROM user_profiles WHERE user_id = %s
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                profile = dict(row)
+                if profile.get("full_name"):
+                    info["name"] = profile["full_name"]
+                if profile.get("phone"):
+                    info["phone"] = profile["phone"]
+                if profile.get("location"):
+                    info["location"] = profile["location"]
+                if profile.get("bio"):
+                    info["bio"] = profile["bio"]
+                if profile.get("current_job_role"):
+                    info["current_role"] = profile["current_job_role"]
+                if profile.get("experience_years"):
+                    info["experience_years"] = profile["experience_years"]
+                if profile.get("linkedin_url"):
+                    info["linkedin_url"] = profile["linkedin_url"]
+                if profile.get("github_url"):
+                    info["github_url"] = profile["github_url"]
+        except Exception as e:
+            logger.warning(f"Failed to fetch user profile: {e}")
+
+    return info
 
 
 

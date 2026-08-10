@@ -18,6 +18,7 @@ const JobRoles = lazy(() => import('./pages/JobRoles'));
 const AIMonitoring = lazy(() => import('./pages/AIMonitoring'));
 const SharedReport = lazy(() => import('./pages/SharedReport'));
 const MockInterview = lazy(() => import('./pages/MockInterview'));
+const CoverLetter = lazy(() => import('./pages/CoverLetter'));
 
 const withBoundary = (node: ReactNode) => <ErrorBoundary>{node}</ErrorBoundary>;
 
@@ -100,6 +101,7 @@ const Layout = () => {
             <Route path="/admin/ai-monitoring" element={<ProtectedRoute allowedRoles={['admin']}>{withBoundary(<AIMonitoring />)}</ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute>{withBoundary(<Profile />)}</ProtectedRoute>} />
             <Route path="/mock-interview" element={<ProtectedRoute excludedRoles={['admin']} redirectTo="/admin">{withBoundary(<MockInterview />)}</ProtectedRoute>} />
+            <Route path="/cover-letter" element={<ProtectedRoute excludedRoles={['admin']} redirectTo="/admin">{withBoundary(<CoverLetter />)}</ProtectedRoute>} />
             <Route path="*" element={<Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/app'} replace />} />
           </Routes>
         </Suspense>
