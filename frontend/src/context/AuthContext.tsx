@@ -44,6 +44,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     let cancelled = false;
+
+    const handleOAuthRedirect = () => {
+      const params = new URLSearchParams(window.location.search);
+      const oauthToken = params.get('oauth_token');
+      const oauthRefresh = params.get('oauth_refresh');
+      if (oauthToken && oauthRefresh) {
+        document.cookie = `skillpath_access=${oauthToken}; path=/; max-age=1800`;
+        document.cookie = `skillpath_refresh=${oauthRefresh}; path=/api/auth; max-age=2592000`;
+        params.delete('oauth_token');
+        params.delete('oauth_refresh');
+        const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+        window.history.replaceState({}, '', newUrl);
+      }
+    };
+
     const fetchUser = async () => {
       try {
         const res = await api.get('/api/auth/me', { _skipAuthRedirect: true } as SkipAuthRedirectConfig);
@@ -61,6 +76,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!cancelled) setLoading(false);
       }
     };
+
+    handleOAuthRedirect();
     fetchUser();
     return () => { cancelled = true; };
   }, []);

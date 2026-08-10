@@ -274,6 +274,16 @@ def init_db():
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS oauth_link_tokens (
+                token VARCHAR(128) PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                google_id VARCHAR(100) NOT NULL,
+                expires_at INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
                 token VARCHAR(128) PRIMARY KEY,
                 user_id INTEGER NOT NULL,

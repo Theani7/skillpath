@@ -31,6 +31,8 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 ENV = os.getenv("ENV", "development").lower()
 IS_PROD = ENV in ("production", "prod")
 
@@ -95,7 +97,29 @@ async def google_callback(request: Request, response: Response):
     if not email:
         raise HTTPException(status_code=400, detail="Could not retrieve email from Google")
 
-    user = _find_or_create_user(email, name, google_id)
+    user, needs_verification = _find_or_create_user(email, name, google_id)
+
+    if needs_verification:
+        link_token = secrets.token_urlsafe(32)
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO oauth_link_tokens (token, user_id, google_id, expires_at) "
+                "VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, "
+                "google_id = EXCLUDED.google_id, expires_at = EXCLUDED.expires_at",
+                (link_token, user["id"], google_id, int(time.time()) + 600),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        response.delete_cookie(key="oauth_state", path="/")
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/verify-google-link?email={email}&link_token={link_token}",
+            status_code=302,
+        )
 
     access_jwt = create_access_token(
         data={"sub": user["username"]},
@@ -116,28 +140,10 @@ async def google_callback(request: Request, response: Response):
     finally:
         conn.close()
 
-    same_site = "lax" if not IS_PROD else "strict"
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=access_jwt,
-        httponly=True,
-        secure=IS_PROD,
-        samesite=same_site,
-        max_age=60 * 30,
-        path="/",
-    )
-    response.set_cookie(
-        key=REFRESH_COOKIE_NAME,
-        value=refresh_jwt,
-        httponly=True,
-        secure=IS_PROD,
-        samesite=same_site,
-        max_age=60 * 60 * 24 * 30,
-        path="/api/auth",
-    )
     response.delete_cookie(key="oauth_state", path="/")
 
-    return RedirectResponse(url="/app", status_code=302)
+    token_params = f"?oauth_token={access_jwt}&oauth_refresh={refresh_jwt}"
+    return RedirectResponse(url=f"{FRONTEND_URL}/app{token_params}", status_code=302)
 
 
 async def _exchange_code(code: str) -> dict:
@@ -172,8 +178,14 @@ async def _get_google_user(access_token: str) -> dict:
     return resp.json()
 
 
-def _find_or_create_user(email: str, name: str, google_id: str) -> dict:
-    """Find existing user by email or Google ID, or create a new one."""
+def _find_or_create_user(email: str, name: str, google_id: str) -> tuple[dict, bool]:
+    """Find existing user by email or Google ID, or create a new one.
+
+    Returns:
+        tuple of (user_dict, needs_password_verification)
+        needs_password_verification is True when an existing password-based
+        account was found and Google needs to be linked after verification.
+    """
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -183,13 +195,19 @@ def _find_or_create_user(email: str, name: str, google_id: str) -> dict:
 
         if user:
             user_dict = dict(user)
-            if not user_dict.get("google_id"):
-                cursor.execute(
-                    "UPDATE users SET google_id = %s, email_verified = 1 WHERE id = %s",
-                    (google_id, user_dict["id"]),
+            existing_google_id = user_dict.get("google_id")
+
+            if existing_google_id == google_id:
+                return user_dict, False
+
+            if existing_google_id and existing_google_id != google_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This email is linked to a different Google account. Please sign in with your password instead.",
                 )
-                conn.commit()
-            return user_dict
+
+            if not existing_google_id:
+                return user_dict, True
 
         base_username = email.split("@")[0].lower()
         username = base_username
@@ -212,7 +230,7 @@ def _find_or_create_user(email: str, name: str, google_id: str) -> dict:
 
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         new_user = cursor.fetchone()
-        return dict(new_user)
+        return dict(new_user), False
     except HTTPException:
         raise
     except Exception as e:
