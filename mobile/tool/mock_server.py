@@ -22,16 +22,26 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _authed(self):
+        return "skillpath_access=" in self.headers.get("Cookie", "")
+
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(n).decode()
         if self.path == "/api/auth/login":
             form = parse_qs(raw)
-            if form.get("username", [""])[0] == "tester" and form.get("password", [""])[0] == "secret123":
-                self._send(200, USER, cookies=[
-                    "skillpath_access=mock-access; Path=/; Max-Age=1800",
-                    "skillpath_refresh=mock-refresh; Path=/api/auth; Max-Age=2592000",
-                ])
+            if (
+                form.get("username", [""])[0] == "tester"
+                and form.get("password", [""])[0] == "secret123"
+            ):
+                self._send(
+                    200,
+                    USER,
+                    cookies=[
+                        "skillpath_access=mock-access; Path=/; Max-Age=1800",
+                        "skillpath_refresh=mock-refresh; Path=/api/auth; Max-Age=2592000",
+                    ],
+                )
             else:
                 self._send(401, {"detail": "Incorrect username or password"})
         elif self.path == "/api/auth/logout":
@@ -42,15 +52,20 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"detail": "not found"})
 
     def do_GET(self):
+        base = self.path.split("?")[0]
+        if base == "/api/auth/me":
+            if not self._authed():
+                self._send(401, {"detail": "Not authenticated"})
+            else:
+                self._send(200, USER)
+            return
         table = {
-            "/api/auth/me": USER,
             "/api/job-roles": {"roles": ["Software Engineer", "Data Scientist"]},
             "/api/user/latest-analysis": {"found": False},
             "/api/user/history": {"history": []},
             "/api/mock-interview": {"roles": ["Software Engineer"]},
             "/api/user/roadmap-progress": {"progress": {}},
         }
-        base = self.path.split("?")[0]
         if base in table:
             self._send(200, table[base])
         else:
