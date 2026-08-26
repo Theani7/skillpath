@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../router.dart';
 import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
+import '../../theme.dart';
 import 'otp_screen.dart';
 
 final _usernamePattern = RegExp(r'^[A-Za-z0-9_.-]{3,50}$');
@@ -77,9 +78,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: CircularProgressIndicator(strokeWidth: 2),
         );
       case _UsernameState.available:
-        return const Icon(Icons.check_circle_outline, color: Colors.green);
+        return const Icon(Icons.check_circle_outline, color: T.success);
       case _UsernameState.taken:
-        return const Icon(Icons.error_outline, color: Colors.red);
+        return const Icon(Icons.error_outline, color: T.error);
       case _UsernameState.idle:
         return null;
     }
