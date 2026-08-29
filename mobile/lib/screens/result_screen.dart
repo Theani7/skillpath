@@ -331,36 +331,56 @@ class _ResultScreenState extends State<ResultScreen> {
           const SizedBox(height: 12),
         ],
 
-        // Score breakdown
+        // Score breakdown — horizontal cards like web (ScoreBreakdown.tsx)
         if (analysis.scoreBreakdown.isNotEmpty) ...[
           _SectionCard(
             icon: Icons.bar_chart_rounded, iconBg: const Color(0xFFFFEDD5), iconColor: T.secondaryDark,
             title: 'Score Breakdown', subtitle: 'Weighted dimensions',
-            child: Column(children: [
-              for (final e in analysis.scoreBreakdown.entries)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Expanded(child: Text(e.key, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.text))),
-                        Text(e.value.toString(), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: T.primary)),
-                      ]),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(100),
-                        child: LinearProgressIndicator(
-                          value: (e.value is num ? (e.value as num).toDouble().clamp(0, 100) : 0) / 100,
-                          minHeight: 6,
-                          backgroundColor: T.borderLight,
-                          valueColor: AlwaysStoppedAnimation((e.value is num && (e.value as num) >= 70) ? T.success : (e.value is num && (e.value as num) >= 50) ? const Color(0xFFF59E0B) : T.error),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final e in analysis.scoreBreakdown.entries)
+                    Builder(builder: (context) {
+                      final dynamic raw = e.value;
+                      num score = 0;
+                      num weight = 0;
+                      String status = 'present';
+                      if (raw is Map) {
+                        score = (raw['score'] as num?) ?? 0;
+                        weight = (raw['weight'] as num?) ?? 0;
+                        status = raw['status']?.toString() ?? 'present';
+                      } else if (raw is num) {
+                        score = raw;
+                      }
+                      final present = status == 'present';
+                      final label = e.key.replaceAll('_', ' ');
+                      final pct = weight > 0 ? (score / weight).clamp(0.0, 1.0) : (score / 100).clamp(0.0, 1.0);
+                      return Container(
+                        width: 132,
+                        margin: const EdgeInsets.only(right: 10),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                        decoration: BoxDecoration(color: T.bg, borderRadius: BorderRadius.circular(T.radiusLg), border: Border.all(color: T.border)),
+                        child: Column(
+                          children: [
+                            Text(score.toStringAsFixed(score.truncateToDouble() == score ? 0 : 1), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: T.primary)),
+                            const SizedBox(height: 2),
+                            Text(label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.04 * 10, color: T.textMuted)),
+                            const SizedBox(height: 8),
+                            ClipRRect(borderRadius: BorderRadius.circular(100), child: LinearProgressIndicator(value: pct, minHeight: 4, backgroundColor: T.borderLight, valueColor: AlwaysStoppedAnimation(present ? T.success : T.error))),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: present ? const Color(0xFFDCFCE7) : T.errorLight, borderRadius: BorderRadius.circular(100)),
+                              child: Text(present ? 'Optimal' : 'Missing', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: present ? const Color(0xFF166534) : T.error)),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-            ]),
+                      );
+                    }),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 12),
         ],
