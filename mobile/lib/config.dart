@@ -11,3 +11,8 @@ const String kApiBaseUrl = String.fromEnvironment(
 );
 
 const String kAppName = 'SkillPath';
+
+const String kWebUrl = String.fromEnvironment(
+  'WEB_URL',
+  defaultValue: 'http://localhost:5173',
+);

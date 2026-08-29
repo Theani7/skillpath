@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config.dart';
 import '../models/analysis.dart';
 import '../router.dart';
 import '../services/api_client.dart';
@@ -398,7 +399,32 @@ class _ResultScreenState extends State<ResultScreen> {
             Expanded(child: FilledButton.icon(onPressed: _load, icon: const Icon(Icons.analytics_outlined, size: 16, color: Colors.white), label: const Text('Refresh', style: TextStyle(color: Colors.white)), style: FilledButton.styleFrom(backgroundColor: T.primary))),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 14),
+        // Website deep-dive banner
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
+          child: Row(
+            children: [
+              Container(height: 36, width: 36, decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.language, size: 18, color: Color(0xFF2563EB))),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Want a deeper dive?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: T.text)),
+                  SizedBox(height: 2),
+                  Text('For more detailed advanced analysis visit website', style: TextStyle(fontSize: 11.5, color: T.textMuted, height: 1.35)),
+                ]),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: () => launchExternal(context, kWebUrl),
+                icon: const Icon(Icons.open_in_new, size: 14, color: Colors.white),
+                label: const Text('Visit Website', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                style: FilledButton.styleFrom(backgroundColor: T.primary, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
