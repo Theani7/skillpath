@@ -2,7 +2,9 @@ name: Mobile Release (APK split-per-abi)
 
 on:
   push:
-    tags: ['v*', 'mobile-v*']
+    tags:
+      - 'v*'
+      - 'mobile-v*'
   workflow_dispatch:
     inputs:
       api_base_url:
@@ -58,24 +60,31 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      # Optional signing — if secrets present, decode keystore. Otherwise uses debug keystore.
-      - name: Decode keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      - name: Decode keystore (if provided)
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.jks
-          cat > android/key.properties <<'EOF'
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.jks
+            cat > android/key.properties <<'EOF'
           storeFile=release.jks
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
-          cat android/key.properties
+            cat android/key.properties
+          else
+            echo "No keystore secret, using debug signing"
+          fi
 
       - name: Build APK --split-per-abi
         run: |
-          API_URL="${{ inputs.api_base_url || secrets.API_BASE_URL || 'https://REPLACE-WITH-YOUR-BACKEND.example.com' }}"
-          WEB_URL="${{ inputs.web_url || secrets.WEB_URL || 'https://skillpath.example.com' }}"
-          BUILD_TYPE="${{ inputs.build_type || 'release' }}"
+          API_URL="${{ inputs.api_base_url }}"
+          if [ -z "$API_URL" ]; then API_URL="${{ secrets.API_BASE_URL }}"; fi
+          if [ -z "$API_URL" ]; then API_URL="https://REPLACE-WITH-YOUR-BACKEND.example.com"; fi
+          WEB_URL="${{ inputs.web_url }}"
+          if [ -z "$WEB_URL" ]; then WEB_URL="${{ secrets.WEB_URL }}"; fi
+          if [ -z "$WEB_URL" ]; then WEB_URL="https://skillpath.example.com"; fi
+          BUILD_TYPE="${{ inputs.build_type }}"
+          if [ -z "$BUILD_TYPE" ]; then BUILD_TYPE="release"; fi
           echo "API_BASE_URL=$API_URL"
           echo "WEB_URL=$WEB_URL"
           echo "BUILD_TYPE=$BUILD_TYPE"
@@ -88,11 +97,10 @@ jobs:
 
       - name: Rename APKs with version
         run: |
-          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $1}' | cut -d' ' -f2 | tr '+' '-')
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | tr '+' '-')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           cd build/app/outputs/flutter-apk
           for f in app-*.apk; do
-            # app-arm64-v8a-release.apk -> skillpath-$VERSION-arm64-v8a.apk
             NEW=$(echo "$f" | sed "s/app-/skillpath-$VERSION-/")
             mv "$f" "$NEW"
             echo "Renamed $f -> $NEW"
@@ -115,21 +123,3 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Optional: also validate on PRs without uploading release
-  check:
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug')
-    name: Check (PR)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
-    steps:
-      - uses: actions/checkout@v5
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter build apk --debug --split-per-abi --dart-define=API_BASE_URL=https://example.com --dart-define=WEB_URL=https://example.com
