@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 
 /// HTTP client wired to the FastAPI backend.
@@ -13,22 +14,29 @@ class Api {
   static final Api instance = Api._();
 
   late final Dio dio;
-  late final PersistCookieJar _cookieJar;
+  late final CookieJar _cookieJar;
 
   bool _refreshing = false;
 
   static Future<Api> init(String baseUrl) async {
     final api = instance;
-    final dir = await defaultCookieDir();
-    api._cookieJar = PersistCookieJar(storage: FileStorage('$dir/cookies'));
     final dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 20),
         receiveTimeout: const Duration(seconds: 90), // AI analysis is slow
         followRedirects: true,
+        extra: kIsWeb ? const {'withCredentials': true} : null,
       ),
     );
+    // Web: browser handles cookies via withCredentials, no file jar needed.
+    // Mobile/desktop: persist cookies to disk.
+    if (kIsWeb) {
+      api._cookieJar = CookieJar(); // in-memory, not used on web
+    } else {
+      final dir = await defaultCookieDir();
+      api._cookieJar = PersistCookieJar(storage: FileStorage('$dir/cookies'));
+    }
     dio.interceptors.add(
       InterceptorsWrapper(
         onError: (e, handler) async {
@@ -57,7 +65,8 @@ class Api {
         },
       ),
     );
-    dio.interceptors.add(CookieManager(api._cookieJar));
+    // Only use CookieManager on non-web (web relies on browser cookies)
+    if (!kIsWeb) dio.interceptors.add(CookieManager(api._cookieJar));
     api.dio = dio;
     return api;
   }
