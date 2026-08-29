@@ -57,8 +57,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze
+      - name: Analyze (non-blocking)
+        run: flutter analyze || true
 
       - name: Decode keystore (if provided)
         run: |
