@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/analysis.dart';
 import '../router.dart';
 import '../services/api_client.dart';
+import '../theme.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({super.key});
@@ -17,9 +18,6 @@ class _ResultScreenState extends State<ResultScreen> {
   bool _loading = true;
   String? _error;
   Analysis? _analysis;
-
-  /// Action items ("tasks") per roadmap phase, extracted from the raw
-  /// payload because [Analysis] does not model them.
   List<List<String>> _phaseTasks = const [];
   Map<String, bool> _progress = const {};
 
@@ -36,32 +34,18 @@ class _ResultScreenState extends State<ResultScreen> {
     });
     try {
       final res = await Api.instance.dio.get('/api/user/latest-analysis');
-      final map = (res.data is Map)
-          ? Map<String, dynamic>.from(res.data as Map)
-          : <String, dynamic>{};
+      final map = (res.data is Map) ? Map<String, dynamic>.from(res.data as Map) : <String, dynamic>{};
       final analysis = map['found'] == true ? Analysis.fromLatest(map) : null;
-
       final tasks = _extractPhaseTasks(map);
-
       var progress = const <String, bool>{};
       final id = analysis?.id;
       if (id != null && analysis != null) {
         try {
-          final pRes = await Api.instance.dio.get(
-            '/api/user/roadmap-progress',
-            queryParameters: {'analysis_id': id},
-          );
-          final raw = (pRes.data is Map)
-              ? (pRes.data as Map)['progress']
-              : null;
-          if (raw is Map) {
-            progress = raw.map((k, v) => MapEntry(k.toString(), v == true));
-          }
-        } catch (_) {
-          // Progress is optional — render without saved state.
-        }
+          final pRes = await Api.instance.dio.get('/api/user/roadmap-progress', queryParameters: {'analysis_id': id});
+          final raw = (pRes.data is Map) ? (pRes.data as Map)['progress'] : null;
+          if (raw is Map) progress = raw.map((k, v) => MapEntry(k.toString(), v == true));
+        } catch (_) {}
       }
-
       if (!mounted) return;
       setState(() {
         _analysis = analysis;
@@ -78,18 +62,13 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
-  /// Pull `action_items` per roadmap phase straight from the response map.
   static List<List<String>> _extractPhaseTasks(Map<String, dynamic> map) {
     final payload = (map['analysis'] as Map?)?.cast<String, dynamic>() ?? map;
     final roadmap = payload['roadmap'];
     if (roadmap is! List) return const [];
     return [
       for (final step in roadmap)
-        if (step is Map)
-          [
-            for (final item in (step['action_items'] as List? ?? const []))
-              item.toString(),
-          ],
+        if (step is Map) [for (final item in (step['action_items'] as List? ?? const [])) item.toString()],
     ];
   }
 
@@ -98,34 +77,65 @@ class _ResultScreenState extends State<ResultScreen> {
     if (id == null) return;
     final key = '$phaseIndex:$taskIndex';
     final previous = _progress[key] ?? false;
-
-    // Optimistic update.
     setState(() => _progress = {..._progress, key: newVal});
     try {
-      await Api.instance.dio.put(
-        '/api/user/roadmap-progress',
-        data: {
-          'analysis_id': id,
-          'phase_index': phaseIndex,
-          'task_index': taskIndex,
-          'completed': newVal,
-        },
-      );
+      await Api.instance.dio.put('/api/user/roadmap-progress', data: {
+        'analysis_id': id,
+        'phase_index': phaseIndex,
+        'task_index': taskIndex,
+        'completed': newVal,
+      });
     } catch (e) {
       if (!mounted) return;
-      // Revert on failure.
       setState(() => _progress = {..._progress, key: previous});
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(Api.errorMessage(e))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Api.errorMessage(e))));
     }
   }
+
+  String get _level {
+    final s = (_analysis?.resumeScore ?? 0).clamp(0, 100);
+    if (s >= 85) return 'excellent';
+    if (s >= 70) return 'good';
+    if (s >= 50) return 'fair';
+    return 'low';
+  }
+
+  Color get _levelColor => switch (_level) {
+        'excellent' => T.success,
+        'good' => const Color(0xFF2563EB),
+        'fair' => const Color(0xFFD97706),
+        _ => T.error,
+      };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Your Results')),
-      body: RefreshIndicator(onRefresh: _load, child: _buildBody(context)),
+      backgroundColor: T.bg,
+      body: Stack(
+        children: [
+          Positioned(
+            top: -120, right: -100,
+            child: Container(
+              width: 360, height: 360,
+              decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [T.primary.withValues(alpha: 0.06), Colors.transparent])),
+            ),
+          ),
+          Positioned(
+            bottom: -140, left: -140,
+            child: Container(
+              width: 380, height: 380,
+              decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [T.secondary.withValues(alpha: 0.05), Colors.transparent])),
+            ),
+          ),
+          SafeArea(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              color: T.secondary,
+              child: _buildBody(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -133,199 +143,304 @@ class _ResultScreenState extends State<ResultScreen> {
     if (_loading) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 160),
-          Center(child: CircularProgressIndicator()),
-        ],
-      );
-    }
-
-    if (_error != null) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
         children: [
-          const SizedBox(height: 120),
-          Icon(
-            Icons.cloud_off_outlined,
-            size: 48,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 40),
           Center(
-            child: FilledButton.tonalIcon(
-              onPressed: _load,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
+              child: const Column(
+                children: [
+                  SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: T.secondary)),
+                  SizedBox(height: 12),
+                  Text('Loading your results…', style: TextStyle(fontSize: 13, color: T.textMuted, fontWeight: FontWeight.w600)),
+                ],
+              ),
             ),
           ),
         ],
       );
     }
-
+    if (_error != null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        children: [
+          const SizedBox(height: 80),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
+            child: Column(
+              children: [
+                Container(height: 48, width: 48, decoration: const BoxDecoration(color: T.errorLight, shape: BoxShape.circle), child: const Icon(Icons.cloud_off_outlined, color: T.error)),
+                const SizedBox(height: 12),
+                Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: T.text)),
+                const SizedBox(height: 16),
+                FilledButton.tonalIcon(onPressed: _load, icon: const Icon(Icons.refresh, size: 18), label: const Text('Retry')),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     final analysis = _analysis;
     if (analysis == null) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(24),
         children: [
-          const SizedBox(height: 120),
-          Icon(
-            Icons.description_outlined,
-            size: 48,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No analysis yet',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Upload a resume to get started',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Center(
-            child: FilledButton.icon(
-              onPressed: () => context.go(Routes.home),
-              icon: const Icon(Icons.upload_file_outlined),
-              label: const Text('Upload a resume'),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+            decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
+            child: Column(
+              children: [
+                Container(
+                  height: 64, width: 64,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.asset('assets/icon.png', fit: BoxFit.contain)),
+                ),
+                const SizedBox(height: 16),
+                Text('No analysis yet', style: displayStyle(context, 20)),
+                const SizedBox(height: 8),
+                const Text('Upload a resume to get your AI-powered report', textAlign: TextAlign.center, style: TextStyle(fontSize: 13.5, color: T.textMuted, height: 1.5)),
+                const SizedBox(height: 20),
+                FilledButton.icon(onPressed: () => context.go(Routes.home), icon: const Icon(Icons.cloud_upload_outlined, size: 18, color: Colors.white), label: const Text('Upload a resume', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)), style: FilledButton.styleFrom(backgroundColor: T.primary, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(46), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.radiusLg)))),
+              ],
             ),
           ),
         ],
       );
     }
 
+    final clamped = analysis.resumeScore.clamp(0.0, 100.0);
+    final label = clamped == clamped.roundToDouble() ? clamped.toStringAsFixed(0) : clamped.toStringAsFixed(1);
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       children: [
-        _ScoreHeader(score: analysis.resumeScore),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (analysis.predictedField.isNotEmpty)
-              Chip(
-                avatar: const Icon(Icons.category_outlined, size: 18),
-                label: Text(analysis.predictedField),
-              ),
-            Chip(
-              avatar: const Icon(Icons.work_outline, size: 18),
-              label: Text('Target: ${analysis.targetRole}'),
-            ),
-          ],
+        // ── header eyebrow
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(color: T.navy100.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(100), border: Border.all(color: T.navy100)),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.insights, size: 11, color: T.primary),
+              SizedBox(width: 6),
+              Text('YOUR RESULTS • AI-POWERED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.08 * 11, color: T.primary)),
+            ]),
+          ),
         ),
-        if (analysis.pdfName != null || analysis.timestamp != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.insert_drive_file_outlined,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    [
-                      if (analysis.pdfName != null) analysis.pdfName!,
-                      if (analysis.timestamp != null) analysis.timestamp!,
-                    ].join(' • '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        if (analysis.skills.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text(
-            'Existing skills',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          _SkillChips(skills: analysis.skills, highlight: false),
-        ],
-        if (analysis.missingSkills.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text(
-            'Missing skills',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          _SkillChips(
-            skills: analysis.missingSkills.map((m) => m.name).toList(),
-            highlight: true,
-          ),
-        ],
-        if (analysis.scoreBreakdown.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text(
-            'Score breakdown',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Card(
-            margin: EdgeInsets.zero,
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                for (final entry in analysis.scoreBreakdown.entries)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    child: Row(
+        const SizedBox(height: 14),
+        Text('Your Report', textAlign: TextAlign.center, style: displayStyle(context, 28)),
+        const SizedBox(height: 6),
+        Text('${analysis.predictedField.isNotEmpty ? '${analysis.predictedField} • ' : ''}Target: ${analysis.targetRole}',
+            textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: T.textMuted, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 18),
+
+        // ── Hero score card
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 110, height: 110,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(width: 110, height: 110, child: CircularProgressIndicator(value: clamped / 100, strokeWidth: 8, strokeCap: StrokeCap.round, backgroundColor: T.borderLight, valueColor: AlwaysStoppedAnimation(_levelColor))),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(child: Text(entry.key)),
-                        Text(
-                          entry.value.toString(),
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
+                        Text('$label%', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: T.text, letterSpacing: -0.02 * 22)),
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: _levelColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(100), border: Border.all(color: _levelColor.withValues(alpha: 0.2))),
+                          child: Text(_level.toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.08 * 9, color: _levelColor)),
                         ),
                       ],
                     ),
-                  ),
-              ],
-            ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Resume Score', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.text)),
+                    const SizedBox(height: 4),
+                    const Text('How well your resume matches your target role.',
+                        style: TextStyle(fontSize: 12.5, color: T.textMuted, height: 1.4)),
+                    const SizedBox(height: 10),
+                    Wrap(spacing: 6, runSpacing: 6, children: [
+                      if (analysis.predictedField.isNotEmpty) _Pill(text: analysis.predictedField, bg: const Color(0xFFF0F4F8), fg: T.primary),
+                      _Pill(text: 'Target: ${analysis.targetRole}', bg: T.successLight, fg: const Color(0xFF166534)),
+                    ]),
+                  ],
+                ),
+              ),
+            ],
           ),
+        ),
+        const SizedBox(height: 10),
+        // meta line
+        if (analysis.pdfName != null || analysis.timestamp != null)
+          Row(
+            children: [
+              const Icon(Icons.insert_drive_file_outlined, size: 13, color: T.textLight),
+              const SizedBox(width: 6),
+              Expanded(child: Text([if (analysis.pdfName != null) analysis.pdfName!, if (analysis.timestamp != null) analysis.timestamp!].join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: T.textMuted, fontWeight: FontWeight.w600))),
+            ],
+          ),
+        const SizedBox(height: 16),
+
+        // Existing skills
+        if (analysis.skills.isNotEmpty) ...[
+          _SectionCard(
+            icon: Icons.check_circle_outline, iconBg: const Color(0xFFDCFCE7), iconColor: T.success,
+            title: 'Existing Skills', subtitle: '${analysis.skills.length} strengths detected',
+            child: Wrap(spacing: 8, runSpacing: 8, children: [for (final s in analysis.skills) Chip(label: Text(s, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)), backgroundColor: T.navy100, side: BorderSide.none, visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2))]),
+          ),
+          const SizedBox(height: 12),
         ],
+
+        // Missing skills
+        if (analysis.missingSkills.isNotEmpty) ...[
+          _SectionCard(
+            icon: Icons.priority_high, iconBg: T.errorLight, iconColor: T.error,
+            title: 'Skill Gaps', subtitle: '${analysis.missingSkills.length} gaps to close • focus here',
+            child: Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final m in analysis.missingSkills)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: T.errorLight, borderRadius: BorderRadius.circular(100), border: Border.all(color: const Color(0xFFFECACA))),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.priority_high_rounded, size: 12, color: T.error),
+                    const SizedBox(width: 4),
+                    Text(m.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.error)),
+                  ]),
+                ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Score breakdown
+        if (analysis.scoreBreakdown.isNotEmpty) ...[
+          _SectionCard(
+            icon: Icons.bar_chart_rounded, iconBg: const Color(0xFFFFEDD5), iconColor: T.secondaryDark,
+            title: 'Score Breakdown', subtitle: 'Weighted dimensions',
+            child: Column(children: [
+              for (final e in analysis.scoreBreakdown.entries)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(child: Text(e.key, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.text))),
+                        Text(e.value.toString(), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: T.primary)),
+                      ]),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(100),
+                        child: LinearProgressIndicator(
+                          value: (e.value is num ? (e.value as num).toDouble().clamp(0, 100) : 0) / 100,
+                          minHeight: 6,
+                          backgroundColor: T.borderLight,
+                          valueColor: AlwaysStoppedAnimation((e.value is num && (e.value as num) >= 70) ? T.success : (e.value is num && (e.value as num) >= 50) ? const Color(0xFFF59E0B) : T.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Roadmap
         if (analysis.roadmap.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text('Roadmap', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          for (var i = 0; i < analysis.roadmap.length; i++)
-            _RoadmapStepTile(
-              phaseIndex: i,
-              step: analysis.roadmap[i],
-              tasks: i < _phaseTasks.length ? _phaseTasks[i] : const [],
-              progress: _progress,
-              onToggle: _toggleTask,
-            ),
+          _SectionCard(
+            icon: Icons.map_outlined, iconBg: const Color(0xFFF0F4F8), iconColor: T.primary,
+            title: 'AI Career Roadmap', subtitle: 'Personalized learning path to close your gaps',
+            child: Column(children: [
+              for (var i = 0; i < analysis.roadmap.length; i++)
+                _RoadmapStepTile(
+                  phaseIndex: i,
+                  step: analysis.roadmap[i],
+                  tasks: i < _phaseTasks.length ? _phaseTasks[i] : const [],
+                  progress: _progress,
+                  onToggle: _toggleTask,
+                ),
+            ]),
+          ),
+          const SizedBox(height: 12),
         ],
-        const SizedBox(height: 32),
+
+        // Actions
+        Row(
+          children: [
+            Expanded(child: OutlinedButton.icon(onPressed: () => context.go(Routes.home), icon: const Icon(Icons.refresh, size: 16), label: const Text('Re-analyze'))),
+            const SizedBox(width: 10),
+            Expanded(child: FilledButton.icon(onPressed: _load, icon: const Icon(Icons.analytics_outlined, size: 16, color: Colors.white), label: const Text('Refresh', style: TextStyle(color: Colors.white)), style: FilledButton.styleFrom(backgroundColor: T.primary))),
+          ],
+        ),
+        const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final String text;
+  final Color bg;
+  final Color fg;
+  const _Pill({required this.text, required this.bg, required this.fg});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(100), border: Border.all(color: fg.withValues(alpha: 0.15))),
+      child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final Widget child;
+  const _SectionCard({required this.icon, required this.iconBg, required this.iconColor, required this.title, required this.subtitle, required this.child});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(height: 30, width: 30, decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 16, color: iconColor)),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: T.text)),
+              Text(subtitle, style: const TextStyle(fontSize: 11.5, color: T.textMuted, fontWeight: FontWeight.w500)),
+            ])),
+          ]),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
     );
   }
 }
@@ -344,128 +459,7 @@ Future<void> launchExternal(BuildContext context, String url) async {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   } catch (_) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Could not open $url')));
-  }
-}
-
-class _ScoreHeader extends StatelessWidget {
-  final double score;
-
-  const _ScoreHeader({required this.score});
-
-  @override
-  Widget build(BuildContext context) {
-    final clamped = score.clamp(0.0, 100.0);
-    final label = clamped == clamped.roundToDouble()
-        ? clamped.toStringAsFixed(0)
-        : clamped.toStringAsFixed(1);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 96,
-              height: 96,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: clamped / 100,
-                    strokeWidth: 8,
-                    strokeCap: StrokeCap.round,
-                  ),
-                  Center(
-                    child: Text(
-                      '$label%',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Resume score',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'How well your resume matches your target role.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SkillChips extends StatelessWidget {
-  final List<String> skills;
-  final bool highlight;
-
-  const _SkillChips({required this.skills, required this.highlight});
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final skill in skills)
-          highlight
-              ? Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.errorContainer.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.priority_high_rounded,
-                        size: 14,
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          skill,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onErrorContainer,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : Chip(label: Text(skill), visualDensity: VisualDensity.compact),
-      ],
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open $url')));
   }
 }
 
@@ -475,97 +469,54 @@ class _RoadmapStepTile extends StatelessWidget {
   final List<String> tasks;
   final Map<String, bool> progress;
   final void Function(int phaseIndex, int taskIndex, bool completed) onToggle;
-
-  const _RoadmapStepTile({
-    required this.phaseIndex,
-    required this.step,
-    required this.tasks,
-    required this.progress,
-    required this.onToggle,
-  });
-
+  const _RoadmapStepTile({required this.phaseIndex, required this.step, required this.tasks, required this.progress, required this.onToggle});
   @override
   Widget build(BuildContext context) {
     var doneCount = 0;
     for (var i = 0; i < tasks.length; i++) {
       if (progress['$phaseIndex:$i'] == true) doneCount++;
     }
-    final subtitleParts = [
-      if (_durationLabel(step.durationWeeks).isNotEmpty)
-        _durationLabel(step.durationWeeks),
-      if (tasks.isNotEmpty) '$doneCount/${tasks.length} tasks',
-    ];
-
-    return Card(
+    final subtitleParts = [if (_durationLabel(step.durationWeeks).isNotEmpty) _durationLabel(step.durationWeeks), if (tasks.isNotEmpty) '$doneCount/${tasks.length} tasks'];
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: T.bg, borderRadius: BorderRadius.circular(T.radiusLg), border: Border.all(color: T.border)),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-        childrenPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
-        title: Text(
-          step.title.isEmpty ? 'Phase ${phaseIndex + 1}' : step.title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        subtitle: subtitleParts.isEmpty
-            ? null
-            : Text(subtitleParts.join(' • ')),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.radiusLg)),
+        collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.radiusLg)),
+        title: Text(step.title.isEmpty ? 'Phase ${phaseIndex + 1}' : step.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.text)),
+        subtitle: subtitleParts.isEmpty ? null : Text(subtitleParts.join(' • '), style: const TextStyle(fontSize: 11, color: T.textMuted, fontWeight: FontWeight.w600)),
         children: [
-          if (step.description.isNotEmpty)
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(step.description),
-            ),
+          if (step.description.isNotEmpty) Align(alignment: Alignment.centerLeft, child: Text(step.description, style: const TextStyle(fontSize: 12.5, color: T.textMuted, height: 1.5))),
           if (step.skills.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final skill in step.skills)
-                    Chip(
-                      label: Text(skill),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                ],
-              ),
-            ),
+            const SizedBox(height: 10),
+            Align(alignment: Alignment.centerLeft, child: Wrap(spacing: 6, runSpacing: 6, children: [for (final s in step.skills) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: T.navy100, borderRadius: BorderRadius.circular(100)), child: Text(s, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: T.navy900)))])),
           ],
           if (tasks.isNotEmpty) ...[
-            const Divider(height: 24),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                'Action items',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-            ),
+            const Divider(height: 20, color: T.borderLight),
+            const Align(alignment: Alignment.centerLeft, child: Text('Action items', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.06 * 11, color: T.textMuted))),
             for (var t = 0; t < tasks.length; t++)
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 controlAffinity: ListTileControlAffinity.leading,
-                title: Text(tasks[t]),
+                title: Text(tasks[t], style: TextStyle(fontSize: 12.5, color: progress['$phaseIndex:$t'] == true ? T.textLight : T.text, decoration: progress['$phaseIndex:$t'] == true ? TextDecoration.lineThrough : null)),
                 value: progress['$phaseIndex:$t'] == true,
-                onChanged: (value) => onToggle(phaseIndex, t, value ?? false),
+                activeColor: T.primary,
+                onChanged: (v) => onToggle(phaseIndex, t, v ?? false),
               ),
           ],
           if (step.resources.isNotEmpty) ...[
-            const Divider(height: 24),
-            for (final resource in step.resources)
+            const Divider(height: 20, color: T.borderLight),
+            for (final r in step.resources)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                leading: const Icon(Icons.link),
-                title: Text(resource.title),
-                trailing: const Icon(Icons.open_in_new, size: 18),
-                onTap: () => launchExternal(context, resource.url),
+                leading: Container(height: 28, width: 28, decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(6), border: Border.all(color: T.border)), child: const Icon(Icons.link, size: 14, color: T.textMuted)),
+                title: Text(r.title, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: T.text)),
+                trailing: const Icon(Icons.open_in_new, size: 14, color: T.textLight),
+                onTap: () => launchExternal(context, r.url),
               ),
           ],
         ],
