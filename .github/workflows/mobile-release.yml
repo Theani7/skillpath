@@ -1,0 +1,135 @@
+name: Mobile Release (APK split-per-abi)
+
+on:
+  push:
+    tags: ['v*', 'mobile-v*']
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'API base URL (dart-define API_BASE_URL)'
+        required: false
+        default: 'https://REPLACE-WITH-YOUR-BACKEND.example.com'
+      web_url:
+        description: 'Web URL (dart-define WEB_URL)'
+        required: false
+        default: 'https://skillpath.example.com'
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options: [release, debug]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobile-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Build APK (split-per-abi)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      # Optional signing — if secrets present, decode keystore. Otherwise uses debug keystore.
+      - name: Decode keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.jks
+          cat > android/key.properties <<'EOF'
+          storeFile=release.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+          cat android/key.properties
+
+      - name: Build APK --split-per-abi
+        run: |
+          API_URL="${{ inputs.api_base_url || secrets.API_BASE_URL || 'https://REPLACE-WITH-YOUR-BACKEND.example.com' }}"
+          WEB_URL="${{ inputs.web_url || secrets.WEB_URL || 'https://skillpath.example.com' }}"
+          BUILD_TYPE="${{ inputs.build_type || 'release' }}"
+          echo "API_BASE_URL=$API_URL"
+          echo "WEB_URL=$WEB_URL"
+          echo "BUILD_TYPE=$BUILD_TYPE"
+          if [ "$BUILD_TYPE" = "debug" ]; then
+            flutter build apk --debug --split-per-abi --dart-define=API_BASE_URL="$API_URL" --dart-define=WEB_URL="$WEB_URL"
+          else
+            flutter build apk --release --split-per-abi --dart-define=API_BASE_URL="$API_URL" --dart-define=WEB_URL="$WEB_URL"
+          fi
+          ls -lh build/app/outputs/flutter-apk/
+
+      - name: Rename APKs with version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $1}' | cut -d' ' -f2 | tr '+' '-')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          cd build/app/outputs/flutter-apk
+          for f in app-*.apk; do
+            # app-arm64-v8a-release.apk -> skillpath-$VERSION-arm64-v8a.apk
+            NEW=$(echo "$f" | sed "s/app-/skillpath-$VERSION-/")
+            mv "$f" "$NEW"
+            echo "Renamed $f -> $NEW"
+          done
+          ls -lh
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: apk-split-per-abi
+          path: mobile/build/app/outputs/flutter-apk/*.apk
+          retention-days: 30
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mobile/build/app/outputs/flutter-apk/*.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: also validate on PRs without uploading release
+  check:
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug')
+    name: Check (PR)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter build apk --debug --split-per-abi --dart-define=API_BASE_URL=https://example.com --dart-define=WEB_URL=https://example.com
