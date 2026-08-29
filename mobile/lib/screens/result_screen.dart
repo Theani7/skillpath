@@ -19,33 +19,13 @@ class _ResultScreenState extends State<ResultScreen> {
   bool _loading = true;
   String? _error;
   Analysis? _analysis;
-  Map<String, dynamic> _raw = {};
   List<List<String>> _phaseTasks = const [];
   Map<String, bool> _progress = const {};
-  List<dynamic> _plans = [];
-  Map<String, dynamic>? _subscription;
-  bool _billingLoading = true;
 
   @override
   void initState() {
     super.initState();
     _load();
-    _loadBilling();
-  }
-
-  Future<void> _loadBilling() async {
-    try {
-      final plansRes = await Api.instance.dio.get('/api/billing/plans');
-      final subRes = await Api.instance.dio.get('/api/billing/subscription');
-      if (!mounted) return;
-      setState(() {
-        _plans = (plansRes.data is Map ? (plansRes.data as Map)['plans'] : null) as List? ?? [];
-        _subscription = subRes.data is Map ? (subRes.data as Map)['subscription'] as Map<String, dynamic>? ?? (subRes.data as Map).cast<String, dynamic>() : null;
-        _billingLoading = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _billingLoading = false);
-    }
   }
 
   Future<void> _load() async {
@@ -70,7 +50,6 @@ class _ResultScreenState extends State<ResultScreen> {
       if (!mounted) return;
       setState(() {
         _analysis = analysis;
-        _raw = map;
         _phaseTasks = tasks;
         _progress = progress;
         _loading = false;
@@ -111,106 +90,6 @@ class _ResultScreenState extends State<ResultScreen> {
       if (!mounted) return;
       setState(() => _progress = {..._progress, key: previous});
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Api.errorMessage(e))));
-    }
-  }
-
-  Future<void> _rewrite() async {
-    final analysis = _analysis;
-    if (analysis == null) return;
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: T.secondary)));
-    try {
-      final resumeData = (_raw['analysis'] is Map ? (_raw['analysis'] as Map)['data'] : null) ?? {'skills': analysis.skills, 'experience': analysis.skills};
-      final res = await Api.instance.dio.post('/api/rewrite-resume', data: {'target_role': analysis.targetRole, 'resume_data': resumeData});
-      if (!mounted) return;
-      Navigator.pop(context);
-      final bullets = (res.data is Map ? (res.data as Map)['rewritten_bullets'] : null) as List?;
-      showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: T.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(T.radiusXl))), builder: (ctx) => DraggableScrollableSheet(expand: false, initialChildSize: 0.7, maxChildSize: 0.9, builder: (_, sc) => ListView(controller: sc, padding: const EdgeInsets.fromLTRB(20, 16, 20, 24), children: [
-            Row(children: [Container(height: 32, width: 32, decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.auto_fix_high, size: 16, color: Color(0xFF2563EB))), const SizedBox(width: 10), const Text('Rewritten Bullets', style: TextStyle(fontWeight: FontWeight.w800, color: T.text))]),
-            const SizedBox(height: 12),
-            if (bullets == null || bullets.isEmpty) const Text('No bullets returned', style: TextStyle(color: T.textMuted)),
-            for (final b in (bullets ?? []))
-              Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: T.bg, borderRadius: BorderRadius.circular(T.radiusLg), border: Border.all(color: T.border)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  if (b is Map && b['before'] != null) Text('Before: ${b['before']}', style: const TextStyle(fontSize: 12, color: T.textLight, decoration: TextDecoration.lineThrough)),
-                  if (b is Map && b['after'] != null) ...[const SizedBox(height: 6), Text(b['after'].toString(), style: const TextStyle(fontSize: 13, color: T.text, fontWeight: FontWeight.w600))],
-                ]),
-              ),
-          ])));
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Api.errorMessage(e))));
-      }
-    }
-  }
-
-  Future<void> _jdCompare() async {
-    final analysis = _analysis;
-    if (analysis == null) return;
-    final ctrl = TextEditingController();
-    final jd = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(
-          title: const Text('JD Compare'),
-          content: TextField(controller: ctrl, maxLines: 6, decoration: const InputDecoration(hintText: 'Paste job description…', border: OutlineInputBorder())),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.radiusXl)),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), style: FilledButton.styleFrom(backgroundColor: T.primary), child: const Text('Compare', style: TextStyle(color: Colors.white)))],
-        ));
-    if (jd == null || jd.isEmpty) return;
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: T.secondary)));
-    try {
-      final res = await Api.instance.dio.post('/api/jd/compare', data: {'resume_skills': analysis.skills, 'job_description': jd});
-      if (!mounted) return;
-      Navigator.pop(context);
-      final data = res.data as Map? ?? {};
-      final cov = data['coverage_score']?.toString() ?? '0';
-      final matched = (data['matched_keywords'] as List? ?? []).cast<String>();
-      final missing = (data['missing_keywords'] as List? ?? []).cast<String>();
-      showModalBottomSheet(context: context, backgroundColor: T.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(T.radiusXl))), builder: (ctx) => Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 24), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [Container(height: 32, width: 32, decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.fact_check_outlined, size: 16, color: T.success)), const SizedBox(width: 10), Text('Coverage $cov%', style: const TextStyle(fontWeight: FontWeight.w800, color: T.text)), const Spacer(), ClipRRect(borderRadius: BorderRadius.circular(100), child: LinearProgressIndicator(value: (int.tryParse(cov) ?? 0) / 100, minHeight: 6, backgroundColor: T.borderLight, valueColor: AlwaysStoppedAnimation(int.parse(cov) >= 70 ? T.success : T.error)))]),
-            const SizedBox(height: 12),
-            if (matched.isNotEmpty) ...[const Text('Matched', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.success)), const SizedBox(height: 6), Wrap(spacing: 6, runSpacing: 6, children: [for (final m in matched.take(12)) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: T.successLight, borderRadius: BorderRadius.circular(100)), child: Text(m, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF166534))))]), const SizedBox(height: 10)],
-            if (missing.isNotEmpty) ...[const Text('Missing', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.error)), const SizedBox(height: 6), Wrap(spacing: 6, runSpacing: 6, children: [for (final m in missing.take(12)) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: T.errorLight, borderRadius: BorderRadius.circular(100)), child: Text(m, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: T.error)))])],
-          ])));
-    } catch (e) {
-      if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Api.errorMessage(e)))); }
-    }
-  }
-
-  Future<void> _projects() async {
-    final analysis = _analysis;
-    if (analysis == null) return;
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: T.secondary)));
-    try {
-      final res = await Api.instance.dio.post('/api/projects/recommend', data: {'target_role': analysis.targetRole, 'missing_skills': analysis.missingSkills.map((m) => m.name).toList()});
-      if (!mounted) return;
-      Navigator.pop(context);
-      final projs = (res.data is Map ? (res.data as Map)['projects'] : null) as List? ?? [];
-      showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: T.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(T.radiusXl))), builder: (ctx) => DraggableScrollableSheet(expand: false, initialChildSize: 0.6, maxChildSize: 0.9, builder: (_, sc) => ListView(controller: sc, padding: const EdgeInsets.fromLTRB(20, 16, 20, 24), children: [
-            Row(children: [Container(height: 32, width: 32, decoration: BoxDecoration(color: const Color(0xFFFFEDD5), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.lightbulb_outline, size: 16, color: T.secondaryDark)), const SizedBox(width: 10), const Text('Recommended Projects', style: TextStyle(fontWeight: FontWeight.w800, color: T.text))]),
-            const SizedBox(height: 12),
-            for (final p in projs)
-              Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: T.bg, borderRadius: BorderRadius.circular(T.radiusLg), border: Border.all(color: T.border)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text((p as Map)['title']?.toString() ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.text)),
-                    const SizedBox(height: 4),
-                    Text((p['objective'] ?? '').toString(), style: const TextStyle(fontSize: 12, color: T.textMuted)),
-                    const SizedBox(height: 6),
-                    Text('${p['estimated_weeks'] ?? 2} weeks', style: const TextStyle(fontSize: 11, color: T.textLight, fontWeight: FontWeight.w700)),
-                  ])),
-          ])));
-    } catch (e) {
-      if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Api.errorMessage(e)))); }
-    }
-  }
-
-  Future<void> _subscribe(String plan) async {
-    try {
-      await Api.instance.dio.post('/api/billing/subscribe', data: {'plan': plan});
-      _loadBilling();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Subscribed to $plan')));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Api.errorMessage(e))));
     }
   }
 
@@ -511,72 +390,6 @@ class _ResultScreenState extends State<ResultScreen> {
           const SizedBox(height: 12),
         ],
 
-        // Toolkit
-        _SectionCard(
-          icon: Icons.build_outlined, iconBg: const Color(0xFFFFEDD5), iconColor: T.secondaryDark,
-          title: 'Career Toolkit', subtitle: 'AI-powered actions for this report',
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
-            _ToolkitChip(icon: Icons.auto_fix_high, label: 'Rewrite Resume', onTap: _rewrite),
-            _ToolkitChip(icon: Icons.fact_check_outlined, label: 'JD Compare', onTap: _jdCompare),
-            _ToolkitChip(icon: Icons.lightbulb_outline, label: 'Projects', onTap: _projects),
-          ]),
-        ),
-        const SizedBox(height: 12),
-
-        // Paywall teaser
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [T.primary, Color(0xFF1A2D4A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-            borderRadius: BorderRadius.circular(T.radiusXl),
-            boxShadow: T.cardShadow,
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(height: 28, width: 28, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.workspace_premium, size: 14, color: Colors.white)),
-              const SizedBox(width: 8),
-              const Expanded(child: Text('Go Pro — unlock everything', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white))),
-              if (!_billingLoading && _subscription != null)
-                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(100)), child: Text((_subscription!['plan'] ?? 'free').toString().toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white))),
-            ]),
-            const SizedBox(height: 8),
-            const Text('Advanced rewrite, interview packs, team ranking and priority support.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
-            const SizedBox(height: 12),
-            if (_billingLoading)
-              const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(children: [
-                  for (final p in _plans)
-                    Container(
-                      width: 150,
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(T.radiusLg)),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text((p['id'] ?? '').toString().toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.06 * 11, color: T.primary)),
-                        const SizedBox(height: 4),
-                        Text('\$${p['price_usd_month'] ?? 0}/mo', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.text)),
-                        const SizedBox(height: 6),
-                        Text(((p['features'] as List? ?? []).take(2).join(' • ')), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: T.textMuted)),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: () => _subscribe((p['id'] ?? 'free').toString()),
-                            style: FilledButton.styleFrom(backgroundColor: p['id'] == 'pro' ? T.secondary : T.primary, padding: const EdgeInsets.symmetric(vertical: 8), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                            child: Text(p['id'] == (_subscription?['plan'] ?? 'free') ? 'Current' : 'Upgrade', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
-                          ),
-                        ),
-                      ]),
-                    ),
-                ]),
-              ),
-          ]),
-        ),
-        const SizedBox(height: 12),
-
         // Actions
         Row(
           children: [
@@ -602,25 +415,6 @@ class _Pill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(100), border: Border.all(color: fg.withValues(alpha: 0.15))),
       child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
-    );
-  }
-}
-
-class _ToolkitChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _ToolkitChip({required this.icon, required this.label, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(100),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: T.primary, borderRadius: BorderRadius.circular(100)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 14, color: Colors.white), const SizedBox(width: 6), Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white))]),
-      ),
     );
   }
 }
