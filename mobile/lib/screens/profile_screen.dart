@@ -328,7 +328,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ]),
                 ]),
               ),
-              IconButton(tooltip: 'Log out', onPressed: () => session.logout(), style: IconButton.styleFrom(backgroundColor: T.bg, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: T.borderLight))), icon: const Icon(Icons.logout, size: 16, color: T.textMuted)),
+              IconButton(
+                  tooltip: 'Log out',
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Log out?'),
+                        content: const Text('Are you sure you want to log out?'),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.radiusXl)),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: T.primary), child: const Text('Log out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
+                        ],
+                      ),
+                    );
+                    if (ok == true) session.logout();
+                  },
+                  style: IconButton.styleFrom(backgroundColor: T.bg, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: T.borderLight))),
+                  icon: const Icon(Icons.logout, size: 16, color: T.textMuted)),
             ],
           ),
           const SizedBox(height: 14),
