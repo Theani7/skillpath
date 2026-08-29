@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../config.dart';
+import '../router.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../state/session.dart';
@@ -31,6 +34,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   List<Map<String, dynamic>> _history = [];
   bool _historyLoading = true;
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -43,6 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _currentPwCtrl.dispose();
     _newPwCtrl.dispose();
     _confirmPwCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -141,6 +147,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _snack(Api.errorMessage(e), error: true);
     } finally {
       if (mounted) setState(() => _clearingAll = false);
+    }
+  }
+
+  Future<void> _shareAnalysis(Map<String, dynamic> item) async {
+    final id = item['id'];
+    if (id == null) return;
+    try {
+      final res = await Api.instance.dio.post('/api/reports/share', data: {'analysis_id': id, 'expires_in_hours': 168, 'is_public': true});
+      if (!mounted) return;
+      if (res.statusCode == 200 && res.data is Map) {
+        final token = (res.data as Map)['share_token']?.toString() ?? '';
+        final link = '$kApiBaseUrl/api/reports/share/$token';
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Share link created'),
+            content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Anyone with the link can view this report (7 days, public).', style: TextStyle(fontSize: 12, color: T.textMuted)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: T.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: T.border)),
+                child: SelectableText(link, style: const TextStyle(fontSize: 11, color: T.primary)),
+              ),
+            ]),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.radiusXl)),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+              FilledButton.icon(onPressed: () async { await Clipboard.setData(ClipboardData(text: link)); if (context.mounted) Navigator.pop(ctx); _snack('Link copied'); }, icon: const Icon(Icons.copy, size: 14, color: Colors.white), label: const Text('Copy', style: TextStyle(color: Colors.white)), style: FilledButton.styleFrom(backgroundColor: T.primary)),
+            ],
+          ),
+        );
+      } else {
+        _snack(_messageOf(res), error: true);
+      }
+    } catch (e) {
+      _snack(Api.errorMessage(e), error: true);
     }
   }
 
@@ -328,6 +371,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ]),
                 ]),
               ),
+              IconButton(tooltip: 'Edit profile', onPressed: () async { final changed = await context.push(Routes.editProfile); if (changed == true && mounted) _loadHistory(); }, style: IconButton.styleFrom(backgroundColor: T.bg, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: T.borderLight))), icon: const Icon(Icons.edit_outlined, size: 16, color: T.primary)),
+              const SizedBox(width: 6),
               IconButton(
                   tooltip: 'Log out',
                   onPressed: () async {
@@ -375,23 +420,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
       action: _history.isEmpty ? null : TextButton(onPressed: _clearingAll ? null : _clearAll, style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap), child: _clearingAll ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: T.primary)) : const Text('Clear All', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
       child: _historyLoading
           ? const Padding(padding: EdgeInsets.all(28), child: Center(child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: T.secondary))))
-          : _history.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-                  child: Column(children: [
-                    Container(height: 44, width: 44, decoration: BoxDecoration(color: T.bg, shape: BoxShape.circle, border: Border.all(color: T.borderLight)), child: const Icon(Icons.history, size: 20, color: T.textLight)),
+          : Builder(builder: (context) {
+              final q = _searchQuery.trim().toLowerCase();
+              final filtered = q.isEmpty
+                  ? _history
+                  : _history.where((e) {
+                      final pdf = (e['pdf_name'] ?? '').toString().toLowerCase();
+                      final role = (e['target_role'] ?? '').toString().toLowerCase();
+                      return pdf.contains(q) || role.contains(q);
+                    }).toList();
+              return Column(
+                children: [
+                  if (_history.isNotEmpty) ...[
+                    TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      decoration: InputDecoration(
+                        hintText: 'Search by file or role',
+                        prefixIcon: const Icon(Icons.search, size: 18, color: T.textLight),
+                        suffixIcon: _searchQuery.isEmpty
+                            ? null
+                            : IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () { _searchCtrl.clear(); setState(() => _searchQuery = ''); }),
+                        filled: true,
+                        fillColor: T.bg,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: T.borderLight)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: T.borderLight)),
+                      ),
+                    ),
                     const SizedBox(height: 10),
-                    const Text('No analyses yet.', style: TextStyle(fontWeight: FontWeight.w700, color: T.text)),
-                    const SizedBox(height: 4),
-                    const Text('Upload a resume from Analyze to get started.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: T.textMuted)),
-                  ]),
-                )
-              : Column(children: [
-                  for (var i = 0; i < _history.length; i++) ...[
-                    if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16, color: T.borderLight),
-                    _historyTile(_history[i]),
                   ],
-                ]),
+                  if (_history.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                      child: Column(children: [
+                        Container(height: 44, width: 44, decoration: BoxDecoration(color: T.bg, shape: BoxShape.circle, border: Border.all(color: T.borderLight)), child: const Icon(Icons.history, size: 20, color: T.textLight)),
+                        const SizedBox(height: 10),
+                        const Text('No analyses yet.', style: TextStyle(fontWeight: FontWeight.w700, color: T.text)),
+                        const SizedBox(height: 4),
+                        const Text('Upload a resume from Analyze to get started.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+                      ]),
+                    ),
+                  if (_history.isNotEmpty && filtered.isEmpty)
+                    const Padding(padding: EdgeInsets.all(16), child: Text('No matches', style: TextStyle(color: T.textMuted))),
+                  if (filtered.isNotEmpty)
+                    Column(children: [
+                      for (var i = 0; i < filtered.length; i++) ...[
+                        if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16, color: T.borderLight),
+                        _historyTile(filtered[i]),
+                      ],
+                    ]),
+                ],
+              );
+            }),
     );
   }
 
@@ -417,6 +498,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         subtitle: Text('${_fmtDate(item['Timestamp'])}${item['target_role'] != null ? ' • ${item['target_role']}' : ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: T.textMuted, fontWeight: FontWeight.w600)),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(100), border: Border.all(color: color.withValues(alpha: 0.18))), child: Text(score, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color))),
+          IconButton(tooltip: 'Share', icon: const Icon(Icons.share_outlined, size: 16, color: T.primary), onPressed: () => _shareAnalysis(item)),
           IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline, size: 16, color: T.textLight), onPressed: () async {
             final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('Delete this analysis?'), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.radiusXl)), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(style: FilledButton.styleFrom(backgroundColor: T.error), onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete'))]));
             if (ok == true) _deleteAnalysis(item);

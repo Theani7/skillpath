@@ -6,14 +6,20 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/cover_letter_screen.dart';
+import 'screens/edit_profile_screen.dart';
 import 'screens/home_shell.dart';
 import 'screens/interview_screen.dart';
+import 'screens/notifications_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/result_screen.dart';
+import 'screens/splash_screen.dart';
 import 'state/session.dart';
 
 /// Route names shared by every screen.
 abstract final class Routes {
+  static const splash = '/splash';
+  static const onboarding = '/onboarding';
   static const login = '/login';
   static const register = '/register';
   static const verify = '/verify';
@@ -23,6 +29,8 @@ abstract final class Routes {
   static const interview = '/interview';
   static const coverLetter = '/cover-letter';
   static const profile = '/profile';
+  static const editProfile = '/profile/edit';
+  static const notifications = '/notifications';
 }
 
 final _authLocations = {
@@ -32,19 +40,35 @@ final _authLocations = {
   Routes.forgot,
 };
 
-GoRouter buildRouter(Session session) {
+GoRouter buildRouter(Session session, {bool hasSeenOnboarding = true}) {
   return GoRouter(
-    initialLocation: Routes.home,
+    initialLocation: Routes.splash,
     refreshListenable: session,
     redirect: (context, state) {
-      if (session.loading) return null;
+      final loc = state.matchedLocation;
+      final isSplash = loc == Routes.splash;
+      final isOnboarding = loc == Routes.onboarding;
+
+      if (session.loading) return isSplash ? null : Routes.splash;
+
+      // first-run onboarding for unauthed users
+      if (!hasSeenOnboarding && !session.isAuthenticated && !isOnboarding && !isSplash && !_authLocations.contains(loc)) {
+        return Routes.onboarding;
+      }
+      if (!hasSeenOnboarding && isSplash && !session.isAuthenticated) return Routes.onboarding;
+
       final authed = session.isAuthenticated;
-      final onAuthScreen = _authLocations.contains(state.matchedLocation);
-      if (!authed && !onAuthScreen) return Routes.login;
-      if (authed && onAuthScreen) return Routes.home;
+      final onAuthScreen = _authLocations.contains(loc);
+      final onSplashOrOnboarding = isSplash || isOnboarding;
+
+      if (!authed && !onAuthScreen && !onSplashOrOnboarding) return Routes.login;
+      if (authed && (onAuthScreen || onSplashOrOnboarding)) return Routes.home;
+      if (isSplash) return authed ? Routes.home : (hasSeenOnboarding ? Routes.login : Routes.onboarding);
       return null;
     },
     routes: [
+      GoRoute(path: Routes.splash, builder: (context, state) => const SplashScreen()),
+      GoRoute(path: Routes.onboarding, builder: (context, state) => const OnboardingScreen()),
       GoRoute(
         path: Routes.login,
         builder: (context, state) => const LoginScreen(),
@@ -64,6 +88,8 @@ GoRouter buildRouter(Session session) {
         path: Routes.forgot,
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
+      GoRoute(path: Routes.editProfile, builder: (context, state) => const EditProfileScreen()),
+      GoRoute(path: Routes.notifications, builder: (context, state) => const NotificationsScreen()),
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
         routes: [

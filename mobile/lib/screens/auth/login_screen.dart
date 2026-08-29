@@ -63,18 +63,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   // ── Brand header ──
                   Column(
                     children: [
-                      Container(
-                        height: 64, width: 64,
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: T.surface,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: T.borderLight),
-                          boxShadow: T.cardShadow,
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.asset('assets/icon.png', fit: BoxFit.contain),
+                      Hero(
+                        tag: 'skillpath-logo',
+                        child: Container(
+                          height: 64, width: 64,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: T.surface,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: T.borderLight),
+                            boxShadow: T.cardShadow,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.asset('assets/icon.png', fit: BoxFit.contain),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 14),
