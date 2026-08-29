@@ -1,10 +1,11 @@
 # SkillPath
 
-> Open-source, AI-powered resume analysis, career coaching, and skill gap identification platform.
+> Open-source, AI-powered resume analysis, career coaching, and skill gap identification — now on Web + Mobile.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9+-yellow.svg)](https://www.python.org/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+[![Flutter 3.47](https://img.shields.io/badge/Flutter-3.47-02569B.svg)](https://flutter.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -12,7 +13,7 @@
 
 ## Overview
 
-SkillPath is a full-stack SaaS platform that transforms static resume reviews into data-driven career coaching. It parses PDF/DOCX resumes, evaluates skills against real-time industry demands, and generates personalized learning roadmaps using NLP and Generative AI.
+SkillPath is a full-stack SaaS platform that transforms static resume reviews into data-driven career coaching. It parses PDF/DOCX resumes, evaluates skills against real-time industry demands, and generates personalized learning roadmaps using NLP and Generative AI. Available as **Web (React)** and **Premium Mobile (Flutter)** with shared FastAPI + PostgreSQL backend.
 
 This is a community project — contributions are welcome. See [Contributing](#contributing) to get started.
 
@@ -75,12 +76,22 @@ This is a community project — contributions are welcome. See [Contributing](#c
 - **Data Export** — CSV export for any table
 - **Taxonomy** — Skills, roadmaps, role configs, video resources management
 
+### Mobile (Flutter) — Premium
+- **S-arrow Splash + Onboarding** — `Hero` `skillpath-logo` flight `Splash → Onboarding (Upload/Analyze/Roadmap 3-page PageView) → Auth`, `SharedPreferences hasSeenOnboarding`
+- **Premium Bottom Nav** — floating 68dp `T.surface` `radius 20` pill ` #FFEDD5` selection, top bar `SkillPath` + `S-arrow 32px` + `notifications bell` pending badge (`GET /api/notifications`) + avatar gradient `T.primary`
+- **Advanced Shimmer Skeletons** — `AdvancedShimmer 1400ms ShaderMask` `T.borderLight→white` across `Analyzer/Result/Profile/Interview/CoverLetter` (`widgets/shimmer.dart` + `skeletons.dart`)
+- **Auth** — `Hero` logo on Login/Register, `full_name` split `First/Last`, strength bar 0-5, `Show/Hide`, username availability debounce, `Logout confirmation` dialog
+- **Analyze** — `Resume Intelligence` header + `StepsIndicator`, `DropZone` `cloud_upload` ↔ `description` success, role dropdown shimmer, 5 MB guard
+- **Results** — hero `110px` circular `level` badge `excellent/good/fair/low`, `Existing Skills`/`Skill Gaps`/`Score Breakdown` horizontal `132px` cards, `AI Career Roadmap` `ExpansionTile` + `launchExternal` + **Website deep-dive banner** `For more detailed advanced analysis visit website` → `kWebUrl` (`WEB_URL` dart-define, default `http://localhost:5173`) via `url_launcher`
+- **Interview** — picker `S-arrow 64px` `AI MOCK INTERVIEW`, chat bubbles `T.primary` user / `T.surface` assistant / `#FFEDD5` feedback, composer `T.bg` + `T.secondary` send, `finish→evaluation` gradient `T.primary→1A2D4A`
+- **Cover Letter** — `AI COVER LETTER` form `target_role/company/JD/hiring_manager` with resume prefill (`GET /latest-analysis`), `CoverLetterSkeleton` on prefilling, paper card `S-arrow 36px` + `AI Generated` pill, `Copy`/`Edit`
+- **Profile** — gradient avatar `56px`, `role`/`Verified` pills, stats `analyses/avg/role`, `Edit Profile` `PUT /api/user/profile`, `History` search `pdf_name/target_role` + `Share` `POST /api/reports/share` 168h public link + `Dismissible` delete, `Security` `Show/Hide`, `Data & Support` export `GET /export` + danger zone
+
 ---
 
 ## Tech Stack
 
 ### Frontend
-
 Managed with **Bun** (install, dev server, build, lint).
 
 | Technology | Version | Purpose |
@@ -93,6 +104,19 @@ Managed with **Bun** (install, dev server, build, lint).
 | Framer Motion | — | Animations and transitions |
 | Lucide React | — | Icon library |
 | Axios | — | HTTP client |
+
+### Mobile
+Managed with **Flutter** (analyze, build, launcher icons).
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Flutter | 3.47.x | UI framework (Material 3, `google_fonts` `plusJakartaSans`/`spaceGrotesk`) |
+| Dart | 3.13.x | Language |
+| `dio` + `cookie_jar` + `dio_cookie_manager` | 5.x | HTTP + `PersistCookieJar` (mobile) / `withCredentials` (web) |
+| `go_router` | 18.x | Routing + `Session` auth guard (`/splash`→`/onboarding`→`/login`→`/` shell) |
+| `provider` + `shared_preferences` | 6.x / 2.5.x | State + `hasSeenOnboarding` |
+| `file_picker` + `url_launcher` + `path_provider` | — | Resume pick, external links, cookie dir |
+| `flutter_launcher_icons` | 0.14.x | `assets/icon.png` `1024×1024` → `mipmap`/`AppIcon`/`web/icons` |
 
 ### Backend
 
@@ -227,6 +251,32 @@ skillpath.ai/
 │   ├── tsconfig.json
 │   └── package.json
 │
+├── mobile/                         # Mobile (Flutter 3.47)
+│   ├── lib/
+│   │   ├── main.dart               # Api.init + SharedPreferences hasSeenOnboarding + Session
+│   │   ├── config.dart             # kApiBaseUrl (API_BASE_URL) + kWebUrl (WEB_URL) + kAppName
+│   │   ├── theme.dart              # T.* Launchpad tokens + buildTheme() + displayStyle
+│   │   ├── router.dart             # GoRouter splash→onboarding→login→/(shell) + auth guard
+│   │   ├── models/analysis.dart    # Analysis + RoadmapStep parsing
+│   │   ├── services/api_client.dart# Dio + PersistCookieJar/withCredentials + 401 refresh
+│   │   ├── state/session.dart      # Session restore/login/logout (ChangeNotifier)
+│   │   ├── screens/splash_screen.dart       # 84px Hero S-arrow + glows
+│   │   ├── screens/onboarding_screen.dart   # PageView 3 × Hero
+│   │   ├── screens/home_shell.dart          # Top bar S-arrow + bell + avatar + floating bottom nav 68dp
+│   │   ├── screens/analyzer_screen.dart     # Resume Intelligence + DropZone
+│   │   ├── screens/result_screen.dart       # Hero 110px + breakdown + roadmap + website banner kWebUrl
+│   │   ├── screens/interview_screen.dart    # Picker + chat bubbles + evaluation gradient
+│   │   ├── screens/cover_letter_screen.dart # JD/hiring_manager + paper + CoverLetterSkeleton
+│   │   ├── screens/profile_screen.dart      # Account 56px gradient + history search/share + security
+│   │   ├── screens/edit_profile_screen.dart # PUT /api/user/profile form
+│   │   ├── screens/notifications_screen.dart# GET /api/notifications list
+│   │   ├── screens/auth/login_screen.dart   # Hero + WELCOME BACK + analytics
+│   │   ├── screens/auth/register_screen.dart# Hero + strength 0-5 + username debounce
+│   │   └── widgets/shimmer.dart + skeletons.dart # AdvancedShimmer 1400ms + Analyzer/Result/Profile/Interview Skeletons
+│   ├── assets/icon.png             # 1024×1024 S-arrow (orange #FF6B35 + navy #0A1628)
+│   ├── android/ + ios/ + web/      # Launcher icons via flutter_launcher_icons (mipmap/AppIcon/web/icons)
+│   └── pubspec.yaml
+│
 ├── api/tests/                      # Backend test suite (pytest)
 │   ├── conftest.py                 # Test env isolation (temp DB, no SMTP)
 │   ├── test_integration.py         # API integration tests
@@ -252,6 +302,7 @@ skillpath.ai/
 
 - **Bun** v1.3+ ([install](https://bun.sh)) — used for all frontend install/dev/build/lint
 - **Python** v3.9+ — `bun run setup` auto-creates a venv at `venvapp/` (Windows needs the `py` launcher from the official Python installer)
+- **Flutter** 3.47+ ([install](https://docs.flutter.dev/get-started/install)) — for mobile (`flutter doctor`)
 - **AI API key** (optional — app works without it using local regex parsing)
 
 ### Quick Start
@@ -273,6 +324,28 @@ The application will be available at:
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
+
+### Mobile Quick Start
+
+```bash
+cd mobile
+flutter pub get
+
+# Chrome (web) — needs backend on 8000
+flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://localhost:8000 --dart-define=WEB_URL=http://localhost:5173
+
+# Android APK (split-per-abi, 3 files ~8–15MB)
+flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://your-api.example.com --dart-define=WEB_URL=https://your-web.example.com
+# → build/app/outputs/flutter-apk/app-arm64-v8a-release.apk etc
+
+# Or via helper (auto-detects IP for physical device)
+# bun run dev:mobile  # if added to package.json
+
+# Icon: drop 1024×1024 PNG at mobile/assets/icon.png then
+dart run flutter_launcher_icons
+```
+
+`kApiBaseUrl` (`API_BASE_URL`) defaults to `https://REPLACE-WITH-YOUR-BACKEND.example.com` and `kWebUrl` (`WEB_URL`) to `http://localhost:5173` — set `WEB_URL` to your deployed frontend for the Results “Visit Website” banner (`url_launcher`).
 
 ### Bun Scripts
 
@@ -362,6 +435,15 @@ bun install
 bun run dev
 ```
 
+#### Mobile
+
+```bash
+cd mobile
+flutter pub get
+flutter analyze
+flutter build web --dart-define=API_BASE_URL=http://localhost:8000 --dart-define=WEB_URL=http://localhost:5173
+```
+
 </details>
 
 ---
@@ -375,6 +457,8 @@ source venvapp/bin/activate
 python -m pytest -q
 ```
 
+Mobile: `cd mobile && flutter analyze && flutter build web --dart-define=API_BASE_URL=http://localhost:8000`
+
 Test environment notes:
 - `api/tests/conftest.py` forces a **temporary database** and disables SMTP/Gemini, so tests are deterministic regardless of your local `.env` (they never touch `api/cv.db` or send real emails).
 - CI runs the same suite on Python 3.11 in `.github/workflows/ci.yml`.
@@ -384,10 +468,20 @@ Test environment notes:
 ## CI/CD
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
+- **Frontend** — `bun install --frozen-lockfile`, `bun run lint`, `npx tsc --noEmit`, `npm test`, `npm run build` → `frontend-dist` artifact + Playwright `chromium` E2E `npm run test:e2e`
+- **Backend** — matrix `3.9/3.11/3.12` + `postgres:16` `skillpath_test`, `pip install -r api/requirements.txt`, `spacy download en_core_web_sm`, `python -m pytest api/tests -q` + advisory `ruff`/`bandit`
 
-- **Frontend** — installs with `bun install --frozen-lockfile`, then `bun run lint` and `bun run build`.
-- **Backend** — `python -m pytest api/tests` against Python 3.11.
+Mobile Release (`mobile-release.yml`) on `push` tag `v*`/`mobile-v*` + `workflow_dispatch` (inputs `api_base_url`/`web_url`/`release|debug`):
+- `Java 17` + `Flutter stable` `cache: true`, `flutter pub get`, `flutter analyze || true` (non-blocking), optional `ANDROID_KEYSTORE_BASE64` → `android/app/release.jks` + `key.properties`, `flutter build apk --split-per-abi --dart-define API_BASE_URL/WEB_URL` (release/debug), rename `skillpath-<version>-<abi>.apk`, `upload-artifact 30d` + `softprops/action-gh-release` `generate_release_notes` on tag → `Releases` with 3 APKs (`arm64-v8a` `armeabi-v7a` `x86_64`).
+- Secrets: `API_BASE_URL`, `WEB_URL`, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (fallback to debug keystore + placeholders).
 
+Local split build: `flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://api.example.com --dart-define=WEB_URL=https://web.example.com`
+
+Tag release:
+```bash
+git tag -a v1.0.1 -m "v1.0.1" && git push origin v1.0.1
+# watch https://github.com/Theani7/skillpath/actions and /releases
+```
 
 ---
 
@@ -608,6 +702,7 @@ Found a security issue? **Do not open a public issue.** Email the maintainers or
 | AI provider fallback chain | `gemini,openai` — one key is enough; local parser as last resort |
 | `run.js` cross-platform helper | Resolves the venv Python binary across macOS/Windows/Linux so `bun run dev:backend` works everywhere |
 | Bun for frontend tooling | `bun install` / `bun run dev` / `bun run build` replace npm for speed and a single lockfile |
+| Flutter for mobile | One codebase for Android APK (split-per-abi) + iOS + Web (Chrome) with shared T.* Launchpad tokens |
 
 ---
 
@@ -618,18 +713,20 @@ Found a security issue? **Do not open a public issue.** Email the maintainers or
 - Group related changes into logical commits
 - Push when feature/fix is complete, not after every small change
 - Follow title case for UI text (e.g., "Log in", "Sign up")
-- Use design tokens from `tokens.css` and `theme.css`
+- Use design tokens from `tokens.css` and `theme.css` + `mobile/lib/theme.dart` `T.*`
 - No comments unless asked
 
 ### Key Patterns
 
 - **Backend routing**: Split across `api/routes/` modules, included in `main.py`
 - **Frontend routes**: Lazy-loaded in `App.tsx` via `React.lazy`
-- **Component structure**: Feature-scoped directories under `frontend/src/components/` (e.g., `analyzer/`, `results/`, `sidebar/`) with barrel `index.js` files
-- **State management**: React Context (`AuthContext`) + local component state
-- **API calls**: Centralized Axios instance with 401 interceptor
-- **Database**: `sqlite3.Row` via `get_db_connection()`, WAL mode + foreign keys
-- **Caching**: In-memory dict caches loaded from DB on startup
+- **Mobile routing**: `GoRouter` `refreshListenable: Session` with `splash→onboarding→login→/(shell)` + `Hero` `skillpath-logo`
+- **Mobile skeletons**: `AdvancedShimmer 1400ms ShaderMask` in `widgets/shimmer.dart` + per-screen `skeletons.dart`
+- **Component structure**: Feature-scoped directories under `frontend/src/components/` (e.g., `analyzer/`, `results/`, `sidebar/`) with barrel `index.js` files + `mobile/lib/screens/*` with `widgets/`
+- **State management**: React Context (`AuthContext`) + local component state / Flutter `Provider` `Session` + `shared_preferences` `hasSeenOnboarding`
+- **API calls**: Centralized Axios instance with 401 interceptor / Flutter `Dio` `PersistCookieJar`/`withCredentials` + 401 refresh
+- **Database**: `sqlite3.Row` via `get_db_connection()`, WAL mode + foreign keys / Postgres `RealDictCursor` pool
+- **Caching**: In-memory dict caches loaded from DB on startup + `analysis_cache` 7-day TTL
 
 ---
 
@@ -649,7 +746,7 @@ Contributions are what make the open-source community amazing. Any contribution 
 
 1. **Fork** the repository and create your branch: `git checkout -b feature/amazing-feature`
 2. Make your changes — keep them focused and follow the [code conventions](#code-conventions)
-3. **Test locally** — `python -m pytest -q` (backend) and `bun run lint` + `bun run build` (frontend)
+3. **Test locally** — `python -m pytest -q` (backend) and `bun run lint` + `bun run build` (frontend) and `cd mobile && flutter analyze && flutter build web --dart-define=API_BASE_URL=http://localhost:8000 --dart-define=WEB_URL=http://localhost:5173`
 4. Commit with a clear message: `git commit -m "feat: add amazing feature"`
 5. **Push** and open a Pull Request
 
@@ -657,6 +754,7 @@ Contributions are what make the open-source community amazing. Any contribution 
 
 - [ ] Tests pass (`python -m pytest -q`)
 - [ ] Frontend builds clean (`bun run build`) and lints (`bun run lint`)
+- [ ] Mobile builds clean (`flutter analyze` + `flutter build web`)
 - [ ] No new dependencies without a good reason
 - [ ] No secrets/keys committed (`.env` is gitignored)
 - [ ] Update docs if behavior changed (README, AGENTS.md)
@@ -687,6 +785,7 @@ If this project helped you, consider giving it a ⭐ — it helps others find it
 - [x] PostgreSQL support for production scaling (dual SQLite/PostgreSQL via `DATABASE_URL`)
 - [x] TypeScript migration (frontend fully typed, strict mode)
 - [x] Alembic schema migrations (versioned, auto-applied)
+- [x] Premium Mobile (Flutter) — Splash/Hero/Onboarding, floating nav/top bar + bell, shimmer skeletons, profile edit/search/share, results website banner, split-per-abi CI
 - [ ] Docker deployment (backend + frontend containers)
 - [ ] i18n beyond English (structure exists in `api/i18n.py`)
 - [ ] OAuth login (Google/GitHub)
