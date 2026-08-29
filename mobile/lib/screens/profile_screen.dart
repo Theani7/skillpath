@@ -12,6 +12,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../state/session.dart';
 import '../theme.dart';
+import '../widgets/shimmer.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -419,7 +420,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       title: 'Analysis History', subtitle: '${_history.length} saved',
       action: _history.isEmpty ? null : TextButton(onPressed: _clearingAll ? null : _clearAll, style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap), child: _clearingAll ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: T.primary)) : const Text('Clear All', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
       child: _historyLoading
-          ? const Padding(padding: EdgeInsets.all(28), child: Center(child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: T.secondary))))
+          ? Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  for (int i = 0; i < 3; i++)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: i == 2 ? 0 : 10),
+                      child: Row(children: [
+                        AdvancedShimmer(child: Container(height: 36, width: 36, decoration: BoxDecoration(color: T.borderLight, borderRadius: BorderRadius.circular(10)))),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            AdvancedShimmer(child: Container(height: 12, width: double.infinity, decoration: BoxDecoration(color: T.borderLight, borderRadius: BorderRadius.circular(6)))),
+                            const SizedBox(height: 6),
+                            AdvancedShimmer(child: Container(height: 10, width: 140, decoration: BoxDecoration(color: T.borderLight, borderRadius: BorderRadius.circular(6)))),
+                          ]),
+                        ),
+                        const SizedBox(width: 10),
+                        AdvancedShimmer(child: Container(height: 22, width: 44, decoration: BoxDecoration(color: T.borderLight, borderRadius: BorderRadius.circular(100)))),
+                      ]),
+                    ),
+                ],
+              ),
+            )
           : Builder(builder: (context) {
               final q = _searchQuery.trim().toLowerCase();
               final filtered = q.isEmpty

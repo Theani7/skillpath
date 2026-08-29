@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/skeletons.dart';
 
 class CoverLetterScreen extends StatefulWidget {
   const CoverLetterScreen({super.key});
@@ -165,19 +166,18 @@ class _CoverLetterScreenState extends State<CoverLetterScreen> {
               const SizedBox(height: 8),
               const Text('Tailored to your resume and target role — paste a JD for extra precision.', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, height: 1.55, color: T.textMuted)),
               const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-                decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
-                child: Form(
-                  key: _formKey,
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_prefilling) ...[
-                        const LinearProgressIndicator(minHeight: 2, color: T.secondary, backgroundColor: T.borderLight),
-                        const SizedBox(height: 14),
-                      ],
+              if (_prefilling)
+                const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: CoverLetterSkeleton())
+              else
+                Container(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                  decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
+                  child: Form(
+                    key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                       _FieldLabel(
                         label: 'Target role',
                         required: true,

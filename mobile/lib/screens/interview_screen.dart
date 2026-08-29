@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/skeletons.dart';
 
 class _ChatMessage {
   final String text;
@@ -250,10 +251,10 @@ class _InterviewScreenState extends State<InterviewScreen> {
           Positioned(bottom: -140, left: -140, child: Container(width: 380, height: 380, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [T.secondary.withValues(alpha: 0.05), Colors.transparent])))),
           SafeArea(
             child: switch (_phase) {
-              _Phase.loadingRoles => const Center(child: SizedBox(height: 28, width: 28, child: CircularProgressIndicator(strokeWidth: 2.5, color: T.secondary))),
+              _Phase.loadingRoles => const Padding(padding: EdgeInsets.fromLTRB(20, 24, 20, 24), child: InterviewSkeleton()),
               _Phase.pick => _buildPicker(),
               _Phase.chatting => _buildChat(),
-              _Phase.evaluating => const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [SizedBox(height: 32, width: 32, child: CircularProgressIndicator(strokeWidth: 3, color: T.secondary)), SizedBox(height: 12), Text('Evaluating your interview…', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textMuted))])),
+              _Phase.evaluating => const Padding(padding: EdgeInsets.all(20), child: ChatSkeleton()),
               _Phase.done => _buildEvaluation(),
             },
           ),

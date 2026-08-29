@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../router.dart';
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/shimmer.dart';
 
 const _fallbackRoles = [
   'General',
@@ -215,15 +216,7 @@ class _AnalyzerScreenState extends State<AnalyzerScreen> {
                                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF334155))),
                                         const SizedBox(height: 8),
                                         if (_loadingRoles)
-                                          Container(
-                                            height: 46,
-                                            decoration: BoxDecoration(
-                                              color: T.bg,
-                                              borderRadius: BorderRadius.circular(T.radiusLg),
-                                              border: Border.all(color: T.border),
-                                            ),
-                                            child: const Center(child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: T.secondary))),
-                                          )
+                                          const AdvancedShimmer(child: SkeletonBlock(height: 46, width: double.infinity, radius: 12))
                                         else
                                           DropdownButtonFormField<String>(
                                             initialValue: _selectedRole,

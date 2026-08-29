@@ -6,6 +6,7 @@ import '../models/analysis.dart';
 import '../router.dart';
 import '../services/api_client.dart';
 import '../theme.dart';
+import '../widgets/skeletons.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({super.key});
@@ -264,23 +265,8 @@ class _ResultScreenState extends State<ResultScreen> {
     if (_loading) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-        children: [
-          const SizedBox(height: 40),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(T.radiusXl), border: Border.all(color: T.borderLight), boxShadow: T.cardShadow),
-              child: const Column(
-                children: [
-                  SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: T.secondary)),
-                  SizedBox(height: 12),
-                  Text('Loading your results…', style: TextStyle(fontSize: 13, color: T.textMuted, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          ),
-        ],
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        children: const [ResultSkeleton()],
       );
     }
     if (_error != null) {
