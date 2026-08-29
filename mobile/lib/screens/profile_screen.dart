@@ -283,10 +283,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _accountCard(dynamic user, Session session) {
-    final name = user?.fullName as String? ?? '';
-    final username = user?.username as String? ?? '';
-    final email = user?.email as String? ?? '';
-    final role = user?.role as String? ?? '';
+    final name = (user as dynamic)?.fullName as String? ?? '';
+    final username = (user as dynamic)?.username as String? ?? '';
+    final role = (user as dynamic)?.role as String? ?? '';
     final initial = name.isNotEmpty ? name[0].toUpperCase() : (username.isNotEmpty ? username[0].toUpperCase() : '?');
     final count = _history.length;
     final avg = count == 0 ? 0 : _history.map((e) => double.tryParse('${e['resume_score']}') ?? 0).reduce((a, b) => a + b) / count;
@@ -312,7 +311,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(name.isNotEmpty ? name : username, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.text)),
                   const SizedBox(height: 2),
-                  Text('@$username${email.isNotEmpty ? ' • $email' : ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: T.textMuted, fontWeight: FontWeight.w600)),
+                  Text('@$username', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: T.textMuted, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   Row(children: [
                     Container(
