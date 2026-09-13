@@ -347,6 +347,21 @@ class AuthFlowTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.json()["available"])
 
+    def test_check_email_not_found(self):
+        resp = client.get(f"/api/auth/check-email/nonexistent_{self.uid}@test.com")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"exists": False, "email_verified": False})
+
+    def test_check_email_exists(self):
+        uname = f"chk_email_{self.uid}"
+        em = f"chk_{self.uid}@test.com"
+        self.users.append(uname)
+        _register_and_verify(uname, em)
+        resp = client.get(f"/api/auth/check-email/{em}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"exists": True, "email_verified": True})
+
+
 
 class AnalysisEndpointTests(unittest.TestCase):
     # Note: this class previously declared setUp twice, so the first definition

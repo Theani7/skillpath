@@ -256,6 +256,21 @@ def check_username(username: str, request: Request):
     return {"available": not exists}
 
 
+@router.get("/check-email/{email:path}")
+def check_email(email: str, request: Request):
+    _check_strict_rate_limit(f"email-check:{client_ip(request)}")
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, email_verified FROM users WHERE LOWER(email) = LOWER(%s)", (email.strip(),))
+        user = cursor.fetchone()
+        if not user:
+            return {"exists": False, "email_verified": False}
+        return {"exists": True, "email_verified": int(user.get("email_verified", 0)) == 1}
+    finally:
+        conn.close()
+
+
 @router.post("/register")
 def register_user(user: UserRegister, request: Request):
     _check_strict_rate_limit(f"register:{client_ip(request)}")

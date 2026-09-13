@@ -4,6 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../router.dart';
 import '../theme.dart';
+import '../widgets/onboarding/analysis_report_illustration.dart';
+import '../widgets/onboarding/career_ascent_illustration.dart';
+import '../widgets/onboarding/resume_audit_illustration.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -13,8 +16,26 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _ctrl = PageController();
+  final PageController _ctrl = PageController();
   int _index = 0;
+
+  static const List<_OnboardItem> _pages = [
+    _OnboardItem(
+      title: 'Get a Clear Picture of Your Resume',
+      desc: 'Upload your resume and let AI analyze it in seconds.',
+      illustration: ResumeAuditIllustration(),
+    ),
+    _OnboardItem(
+      title: 'Get Detailed Feedback',
+      desc: "Find out what's working, what can be improved, and how to make your resume stronger.",
+      illustration: AnalysisReportIllustration(),
+    ),
+    _OnboardItem(
+      title: 'Build a Stronger You',
+      desc: 'Create a better resume, unlock new opportunities, and take the next step in your career.',
+      illustration: CareerAscentIllustration(),
+    ),
+  ];
 
   Future<void> _complete() async {
     final prefs = await SharedPreferences.getInstance();
@@ -38,84 +59,237 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLast = _index == _pages.length - 1;
+
     return Scaffold(
       backgroundColor: T.bg,
       body: Stack(
         children: [
-          Positioned(top: -120, right: -100, child: Container(width: 360, height: 360, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [T.primary.withValues(alpha: 0.06), Colors.transparent])))),
-          Positioned(bottom: -140, left: -140, child: Container(width: 380, height: 380, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [T.secondary.withValues(alpha: 0.05), Colors.transparent])))),
+          // Ambient soft background corner gradients
+          Positioned(
+            top: -120,
+            right: -100,
+            child: Container(
+              width: 360,
+              height: 360,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    T.primary.withValues(alpha: 0.05),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -140,
+            left: -140,
+            child: Container(
+              width: 380,
+              height: 380,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    T.secondary.withValues(alpha: 0.06),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
           SafeArea(
             child: Column(
               children: [
+                // Top bar with Skip button
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Row(
-                    children: [
-                      const Spacer(),
-                      TextButton(onPressed: _skip, child: const Text('Skip', style: TextStyle(color: T.textMuted, fontWeight: FontWeight.w700))),
-                    ],
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: SizedBox(
+                    height: 44,
+                    child: Row(
+                      children: [
+                        const Spacer(),
+                        AnimatedOpacity(
+                          opacity: isLast ? 0.0 : 1.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: IgnorePointer(
+                            ignoring: isLast,
+                            child: TextButton(
+                              onPressed: _skip,
+                              style: TextButton.styleFrom(
+                                foregroundColor: T.textMuted,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              child: const Text(
+                                'Skip',
+                                style: TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+
+                // Main Page View
                 Expanded(
-                  child: PageView(
+                  child: PageView.builder(
                     controller: _ctrl,
+                    itemCount: _pages.length,
                     onPageChanged: (i) => setState(() => _index = i),
-                    children: const [
-                      _OnboardPage(
-                        icon: Icons.cloud_upload_outlined,
-                        title: 'Upload your resume',
-                        desc: 'Drop a PDF or DOCX — we extract every skill with magic-byte validation and 5 MB limit.',
-                        color: T.primary,
-                        bg: T.navy100,
-                      ),
-                      _OnboardPage(
-                        icon: Icons.insights_outlined,
-                        title: 'Discover skill gaps',
-                        desc: 'AI compares you to 22 target roles and shows 82% match style insights in seconds.',
-                        color: T.secondaryDark,
-                        bg: Color(0xFFFFEDD5),
-                      ),
-                      _OnboardPage(
-                        icon: Icons.map_outlined,
-                        title: 'Get your roadmap',
-                        desc: 'Personalized learning path with courses, projects and interview practice to land the role.',
-                        color: T.success,
-                        bg: T.successLight,
-                        isLast: true,
-                      ),
-                    ],
+                    itemBuilder: (context, index) {
+                      final item = _pages[index];
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight,
+                              ),
+                              child: IntrinsicHeight(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      const SizedBox(height: 8),
+
+                                      // Headline
+                                      Text(
+                                        item.title,
+                                        textAlign: TextAlign.center,
+                                        style: displayStyle(context, 26).copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          height: 1.25,
+                                          letterSpacing: -0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+
+                                      // Subtitle
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          item.desc,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 14.5,
+                                            height: 1.5,
+                                            color: T.textMuted,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+
+                                      // Center Illustration
+                                      Expanded(
+                                        child: Center(
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: item.illustration,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
+
+                // Bottom Indicator & Action CTA
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // 3-dot indicator
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          for (int i = 0; i < 3; i++)
+                          for (int i = 0; i < _pages.length; i++)
                             AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
+                              duration: const Duration(milliseconds: 250),
                               margin: const EdgeInsets.symmetric(horizontal: 4),
-                              height: 6,
-                              width: _index == i ? 22 : 6,
-                              decoration: BoxDecoration(color: _index == i ? T.primary : T.border, borderRadius: BorderRadius.circular(100)),
+                              height: 7,
+                              width: _index == i ? 22 : 7,
+                              decoration: BoxDecoration(
+                                color: _index == i ? T.secondary : const Color(0xFFD4D8E0),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
                             ),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 22),
+
+                      // CTA Button
                       SizedBox(
                         width: double.infinity,
+                        height: 52,
                         child: FilledButton(
                           onPressed: () {
-                            if (_index < 2) {
-                              _ctrl.nextPage(duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
+                            if (!isLast) {
+                              _ctrl.nextPage(
+                                duration: const Duration(milliseconds: 320),
+                                curve: Curves.easeInOut,
+                              );
                             } else {
                               _complete();
                             }
                           },
-                          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48), backgroundColor: _index == 2 ? T.secondary : T.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.radiusLg))),
-                          child: Text(_index == 2 ? 'Get Started' : 'Next', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: T.secondary,
+                            foregroundColor: Colors.white,
+                            elevation: 2,
+                            shadowColor: T.secondary.withValues(alpha: 0.35),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: isLast
+                              ? const Text(
+                                  'Get Started',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Next',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Icon(
+                                      Icons.arrow_forward,
+                                      size: 18,
+                                      color: Colors.white,
+                                    ),
+                                  ],
+                                ),
                         ),
                       ),
                     ],
@@ -130,54 +304,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _OnboardPage extends StatelessWidget {
-  final IconData icon;
+class _OnboardItem {
   final String title;
   final String desc;
-  final Color color;
-  final Color bg;
-  final bool isLast;
-  const _OnboardPage({required this.icon, required this.title, required this.desc, required this.color, required this.bg, this.isLast = false});
+  final Widget illustration;
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Hero(
-            tag: isLast ? 'skillpath-logo' : 'onboard-$title',
-            child: Container(
-              height: isLast ? 78 : 96, width: isLast ? 78 : 96,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: isLast ? T.surface : bg, borderRadius: BorderRadius.circular(20), border: Border.all(color: isLast ? T.borderLight : Colors.transparent), boxShadow: isLast ? T.cardShadow : []),
-              child: isLast
-                  ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.asset('assets/icon.png', fit: BoxFit.contain))
-                  : Icon(icon, size: 42, color: color),
-            ),
-          ),
-          const SizedBox(height: 22),
-          Text(title, textAlign: TextAlign.center, style: displayStyle(context, 24)),
-          const SizedBox(height: 10),
-          Text(desc, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, height: 1.6, color: T.textMuted)),
-          if (!isLast) ...[
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(100), border: Border.all(color: T.borderLight)),
-              child: Text(
-                switch (title) {
-                  'Upload your resume' => 'PDF • DOCX • 5 MB',
-                  'Discover skill gaps' => '22 roles • 15 skills each',
-                  _ => 'Courses • Projects • Interviews',
-                },
-                style: const TextStyle(fontSize: 11, color: T.textLight, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  const _OnboardItem({
+    required this.title,
+    required this.desc,
+    required this.illustration,
+  });
 }
