@@ -116,6 +116,10 @@ def _send_otp(email: str, otp: str, purpose: str) -> dict:
         if sent:
             return {"otp_sent": True}
         logger.error("Failed to send %s OTP email to %s", purpose, email)
+    elif not IS_PROD:
+        logger.info("[DEV OTP] %s OTP for %s: %s", purpose, email, otp)
+        print(f"\n========================================\n[DEV OTP] Purpose: {purpose} | Email: {email} | Code: {otp}\n========================================\n", flush=True)
+        return {"otp_sent": True, "dev_otp": otp}
     else:
         logger.warning(
             "SMTP not configured – %s OTP for %s could not be sent.",
@@ -305,10 +309,13 @@ def register_user(user: UserRegister, request: Request):
             (user.username, user.email, user.full_name, hashed_password)
         )
         _store_otp(cursor, conn, user.email, "register", otp)
-        return {
+        resp = {
             "message": "Registration successful. Check your email for the verification code.",
             "otp_sent": delivery["otp_sent"],
         }
+        if "dev_otp" in delivery:
+            resp["dev_otp"] = delivery["dev_otp"]
+        return resp
     except HTTPException:
         raise
     except Exception as e:

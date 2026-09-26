@@ -211,7 +211,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: Props) => {
       });
       const data = await res.json();
       if (res.ok) {
-        setOtpDigits(Array(OTP_LENGTH).fill(''));
+        setOtpDigits(data.dev_otp ? data.dev_otp.split('') : Array(OTP_LENGTH).fill(''));
         setVerifyError('');
         setRegStep('otp');
         startResendCountdown();

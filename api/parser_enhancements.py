@@ -4,7 +4,10 @@ import re
 import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import spacy
+try:
+    import spacy
+except ImportError:  # optional on Python versions without spaCy wheels (e.g. 3.14)
+    spacy = None  # type: ignore
 from dateutil import parser as date_parser
 from dateutil.parser import ParserError
 from rapidfuzz import fuzz, process
@@ -147,6 +150,10 @@ def _get_nlp():
     """Lazy-load spaCy model (singleton)."""
     global _nlp
     if _nlp is None:
+        if spacy is None:
+            logger.warning("spaCy not installed, falling back to regex-only parsing")
+            _nlp = False
+            return _nlp
         try:
             _nlp = spacy.load("en_core_web_sm")
         except OSError:
