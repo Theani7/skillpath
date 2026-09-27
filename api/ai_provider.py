@@ -29,9 +29,10 @@ class GeminiProvider:
         if api_key and api_key != "test-key":
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel("gemini-2.0-flash")
+            model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
+            self.model = genai.GenerativeModel(model_name)
             self._genai = genai
-            logger.info("Gemini provider configured.")
+            logger.info(f"Gemini provider configured with model {model_name}.")
         else:
             logger.warning("Gemini provider disabled (GEMINI_API_KEY not set).")
 
