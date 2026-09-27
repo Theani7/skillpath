@@ -1,15 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Sparkles, ArrowRight, CheckCircle, TrendingUp, Lightbulb, Award, RotateCcw, Quote, Send, User } from 'lucide-react';
+import { MessageSquare, Sparkles, ArrowRight, CheckCircle, TrendingUp, Lightbulb, Award, RotateCcw, Quote, Send, User, HelpCircle } from 'lucide-react';
 import api from '../../services/api';
 import { InterviewerAvatar, TypingDots, ScoreRing } from './';
 import type { InterviewEvaluation } from '../../types';
 
-type ChatMessage = { type: 'question' | 'answer'; text: string };
+type ChatMessage = {
+  type: 'question' | 'answer';
+  text: string;
+  feedback?: string;
+};
 
 type Props = {
   selectedRole: string;
 };
+
+const SUGGESTED_PROMPTS = [
+  'Can you clarify the requirements?',
+  'Could you give me a hint?',
+  'What architecture tradeoffs should I focus on?',
+  'Let\'s move to the next challenge',
+];
 
 function AIInterviewMode({ selectedRole }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -33,9 +44,10 @@ function AIInterviewMode({ selectedRole }: Props) {
     setStarting(true);
     try {
       const res = await api.post('/api/mock-interview/start', { role: selectedRole });
+      const initialQ = res.data.question;
       setSessionId(res.data.session_id);
-      setCurrentQuestion(res.data.question);
-      setChatHistory([]);
+      setCurrentQuestion(initialQ);
+      setChatHistory([{ type: 'question', text: initialQ }]);
       setFeedback('');
       setQuestionNumber(1);
       setFinished(false);
@@ -58,19 +70,26 @@ function AIInterviewMode({ selectedRole }: Props) {
 
     try {
       const res = await api.post('/api/mock-interview/answer', {
-        session_id: sessionId, question: currentQ, answer, role: selectedRole, chat_history: chatHistory,
+        session_id: sessionId,
+        question: currentQ,
+        answer,
+        role: selectedRole,
+        chat_history: chatHistory,
       });
-      // Commit to the transcript only once the exchange has succeeded.
-      // Doing it up front meant a failed request left the question in history
-      // while the session had not actually advanced.
-      setChatHistory(prev => [...prev, { type: 'question', text: currentQ }, { type: 'answer', text: answer }]);
+
+      const nextText = res.data.response || res.data.next_question || '';
+      const coachFeedback = res.data.feedback ?? '';
+
+      setChatHistory(prev => [
+        ...prev,
+        { type: 'answer', text: answer },
+        { type: 'question', text: nextText, feedback: coachFeedback },
+      ]);
       setUserAnswer('');
-      setFeedback(res.data.feedback ?? '');
-      setCurrentQuestion(res.data.next_question ?? '');
+      setFeedback(coachFeedback);
+      setCurrentQuestion(nextText);
       setQuestionNumber(res.data.question_number ?? questionNumber + 1);
     } catch (_err) {
-      // Keep the typed answer and the current question so the user can retry
-      // instead of losing their work and being stranded on a blank turn.
       setError('Could not send your answer. Check your connection and try again.');
     } finally {
       setLoading(false);
@@ -122,20 +141,20 @@ function AIInterviewMode({ selectedRole }: Props) {
           color: 'var(--color-secondary)', background: 'rgba(255, 107, 53, 0.08)',
           border: '1px solid rgba(255, 107, 53, 0.15)', marginBottom: '16px',
         }}>
-          <Sparkles size={12} /> Live AI Interviewer
+          <Sparkles size={12} /> Interactive LLM Interviewer
         </div>
         <h3 style={{
           fontSize: '24px', fontWeight: 800, color: 'var(--color-text)', marginBottom: '10px',
           letterSpacing: 'var(--tracking-tight)',
         }}>
-          Ready when you are
+          Dynamic AI Technical Interview
         </h3>
         <p style={{
           fontSize: '14px', color: 'var(--color-text-muted)', lineHeight: 1.6,
-          maxWidth: '420px', margin: '0 auto 28px',
+          maxWidth: '460px', margin: '0 auto 28px',
         }}>
-          You'll be interviewed for the <strong style={{ color: 'var(--color-text)' }}>{selectedRole}</strong> role.
-          Answer out loud in your head, get coaching after each reply, and a final score at the end.
+          Interviewing for the <strong style={{ color: 'var(--color-text)' }}>{selectedRole}</strong> position.
+          Have a real back-and-forth conversation: answer questions, ask for clarifications or hints, and discuss tradeoffs like with a human interviewer.
         </p>
         <button
           onClick={startInterview}
@@ -265,17 +284,21 @@ function AIInterviewMode({ selectedRole }: Props) {
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             {chatHistory.map((msg, i) => (
-              <div key={i}>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {msg.type === 'question' ? (
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                     <InterviewerAvatar size={34} />
-                    <div style={{ maxWidth: '82%' }}>
+                    <div style={{ maxWidth: '85%' }}>
                       <div style={{
-                        padding: '12px 16px', borderRadius: '4px 14px 14px 14px',
+                        padding: '14px 18px', borderRadius: '4px 16px 16px 16px',
                         background: 'var(--color-bg)', color: 'var(--color-text)',
-                        border: '1px solid var(--color-border)', fontSize: '14px', lineHeight: 1.6,
-                      }}>{msg.text}</div>
-                      <span style={{ fontSize: '11px', color: 'var(--color-text-light)', marginLeft: '4px', fontWeight: 600 }}>Interviewer</span>
+                        border: '1px solid var(--color-border)', fontSize: '14px', lineHeight: 1.65,
+                      }}>
+                        {msg.text}
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-light)', marginLeft: '4px', fontWeight: 600 }}>
+                        Interviewer
+                      </span>
                     </div>
                   </div>
                 ) : (
@@ -284,43 +307,48 @@ function AIInterviewMode({ selectedRole }: Props) {
                       width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
                       background: 'var(--color-secondary)', color: 'white',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}><User size={18} /></div>
-                    <div style={{ maxWidth: '82%' }}>
+                    }}>
+                      <User size={18} />
+                    </div>
+                    <div style={{ maxWidth: '85%' }}>
                       <div style={{
-                        padding: '12px 16px', borderRadius: '14px 4px 14px 14px',
+                        padding: '14px 18px', borderRadius: '16px 4px 16px 16px',
                         background: 'linear-gradient(135deg, var(--color-secondary), var(--color-secondary-dark))',
-                        color: 'white', fontSize: '14px', lineHeight: 1.6,
-                      }}>{msg.text}</div>
-                      <span style={{ fontSize: '11px', color: 'var(--color-text-light)', marginRight: '4px', fontWeight: 600, display: 'block', textAlign: 'right' }}>You</span>
+                        color: 'white', fontSize: '14px', lineHeight: 1.65,
+                      }}>
+                        {msg.text}
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-light)', marginRight: '4px', fontWeight: 600, display: 'block', textAlign: 'right' }}>
+                        You
+                      </span>
                     </div>
                   </div>
                 )}
+
+                {msg.feedback && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    style={{ marginLeft: '46px', maxWidth: '85%' }}
+                    data-testid="coach-note"
+                  >
+                    <div style={{
+                      padding: '10px 14px', borderRadius: '12px',
+                      background: 'rgba(34, 197, 94, 0.08)', border: '1px dashed rgba(34, 197, 94, 0.35)',
+                      fontSize: '12px', lineHeight: 1.5, color: 'var(--color-text-muted)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <Quote size={12} style={{ color: 'var(--color-success)' }} />
+                        <span style={{ fontWeight: 700, fontSize: '10px', color: 'var(--color-success)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Coach's note
+                        </span>
+                      </div>
+                      {msg.feedback}
+                    </div>
+                  </motion.div>
+                )}
               </div>
             ))}
-
-            {feedback && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                style={{
-                  display: 'flex', gap: '12px', alignItems: 'flex-start', marginLeft: '46px',
-                }}
-                data-testid="coach-note"
-              >
-                <div style={{
-                  flex: 1, padding: '12px 16px', borderRadius: '14px',
-                  background: 'rgba(34, 197, 94, 0.06)', border: '1px dashed rgba(34, 197, 94, 0.3)',
-                  fontSize: '13px', lineHeight: 1.65, color: 'var(--color-text-muted)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                    <Quote size={13} style={{ color: 'var(--color-success)' }} />
-                    <span style={{ fontWeight: 700, fontSize: '11px', color: 'var(--color-success)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Coach's note</span>
-                  </div>
-                  {feedback}
-                </div>
-              </motion.div>
-            )}
 
             {loading && (
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -332,30 +360,6 @@ function AIInterviewMode({ selectedRole }: Props) {
                   <TypingDots />
                 </div>
               </div>
-            )}
-
-            {/* The question awaiting an answer. It only enters chatHistory once
-                it has been answered, so without this the very first question -
-                and every follow-up - stayed invisible until after the user had
-                already replied to it. */}
-            {!loading && currentQuestion && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}
-                data-testid="current-question"
-              >
-                <InterviewerAvatar size={34} />
-                <div style={{ maxWidth: '82%' }}>
-                  <div style={{
-                    padding: '12px 16px', borderRadius: '4px 14px 14px 14px',
-                    background: 'var(--color-bg)', color: 'var(--color-text)',
-                    border: '1px solid var(--color-border)', fontSize: '14px', lineHeight: 1.6,
-                  }}>{currentQuestion}</div>
-                  <span style={{ fontSize: '11px', color: 'var(--color-text-light)', marginLeft: '4px', fontWeight: 600 }}>Interviewer</span>
-                </div>
-              </motion.div>
             )}
 
             {error && (
@@ -372,6 +376,36 @@ function AIInterviewMode({ selectedRole }: Props) {
           </div>
         </div>
 
+        {/* Quick prompt suggestions */}
+        <div style={{
+          display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '8px',
+        }}>
+          {SUGGESTED_PROMPTS.map((prompt, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => setUserAnswer(prompt)}
+              style={{
+                flexShrink: 0, padding: '6px 12px', borderRadius: '20px',
+                background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                color: 'var(--color-text-muted)', fontSize: '12px', fontWeight: 500,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                transition: 'all 150ms ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'var(--color-secondary)';
+                e.currentTarget.style.color = 'var(--color-text)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+                e.currentTarget.style.color = 'var(--color-text-muted)';
+              }}
+            >
+              <HelpCircle size={12} /> {prompt}
+            </button>
+          ))}
+        </div>
+
         <div style={{
           display: 'flex', gap: '10px', padding: '16px', background: 'var(--color-surface)',
           borderRadius: '18px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-card)',
@@ -380,7 +414,7 @@ function AIInterviewMode({ selectedRole }: Props) {
             value={userAnswer}
             onChange={(e) => setUserAnswer(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitAnswer(); } }}
-            placeholder="Type your answer…"
+            placeholder="Type your answer, ask a question, or ask for a hint…"
             rows={2}
             style={{
               flex: 1, padding: '12px', borderRadius: '12px',
@@ -440,14 +474,14 @@ function AIInterviewMode({ selectedRole }: Props) {
           />
         </div>
         <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '20px' }}>
-          Question {questionNumber} <span style={{ color: 'var(--color-text-light)' }}>· in progress</span>
+          Turn {questionNumber} <span style={{ color: 'var(--color-text-light)' }}>· active dialogue</span>
         </div>
 
         <div style={{
           fontSize: '11px', color: 'var(--color-text-light)', lineHeight: 1.6,
           borderTop: '1px solid var(--color-border)', paddingTop: '14px',
         }}>
-          Answer each question, then read your coach's note before the next one. End anytime for a score.
+          Talk freely with the interviewer. Answer questions, ask for hints or clarifications, and discuss tradeoffs. Click "End" anytime to get your evaluation.
         </div>
       </div>
     </div>
